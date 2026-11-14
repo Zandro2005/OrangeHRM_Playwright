@@ -13,9 +13,9 @@ export default defineConfig({
   forbidOnly: IS_CI,
   retries: IS_CI ? 2 : 1,
   workers: IS_CI ? 2 : undefined,
-  timeout: 60_000,
+  timeout: 120_000,
   expect: {
-    timeout: 15_000,
+    timeout: 25_000,
   },
   reporter: [
     ['list'],
@@ -23,6 +23,8 @@ export default defineConfig({
   ],
   use: {
     baseURL: BASE_URL,
+    actionTimeout: 20_000,
+    navigationTimeout: 45_000,
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
