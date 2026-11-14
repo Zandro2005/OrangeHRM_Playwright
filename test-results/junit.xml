@@ -1,0 +1,320 @@
+<testsuites id="" name="" tests="26" failures="0" skipped="0" errors="16" time="62.324354">
+<testsuite name="login.spec.ts" timestamp="2026-11-13T23:14:35.191Z" hostname="chromium" tests="10" failures="0" skipped="0" time="99.578" errors="0">
+<testcase name="Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e" classname="login.spec.ts" time="7.278">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-002: Invalid login with wrong password shows error banner @negative @regression" classname="login.spec.ts" time="7.081">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-003: Parameterized invalid login cases (non-existent user, case sensitivity) @negative @regression" classname="login.spec.ts" time="15.056">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-004: Empty username validation displays Required error @negative @regression" classname="login.spec.ts" time="3.165">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-005: Empty password and both empty fields display Required errors @negative @regression" classname="login.spec.ts" time="4.328">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e" classname="login.spec.ts" time="13.927">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-007: Session validation redirects on expired session or 401 API interception @integration @api-mock @negative" classname="login.spec.ts" time="16.74">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state" classname="login.spec.ts" time="15.752">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-009: Login page &amp; invalid error banner visual regression @visual" classname="login.spec.ts" time="9.645">
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-010: Login form accessibility audit and keyboard Tab/Enter login @a11y" classname="login.spec.ts" time="6.606">
+</testcase>
+</testsuite>
+<testsuite name="login.spec.ts" timestamp="2026-11-13T23:14:35.191Z" hostname="firefox" tests="4" failures="0" skipped="0" time="0" errors="4">
+<testcase name="Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [firefox] › login.spec.ts:79:7 › Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [firefox] › login.spec.ts:151:7 › Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [firefox] › login.spec.ts:187:7 › Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-009: Login page &amp; invalid error banner visual regression @visual" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [firefox] › login.spec.ts:214:7 › Authentication @auth › TC-AUTH-009: Login page & invalid error banner visual regression @visual 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+</testsuite>
+<testsuite name="login.spec.ts" timestamp="2026-11-13T23:14:35.191Z" hostname="webkit" tests="4" failures="0" skipped="0" time="0" errors="4">
+<testcase name="Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [webkit] › login.spec.ts:79:7 › Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [webkit] › login.spec.ts:151:7 › Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [webkit] › login.spec.ts:187:7 › Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-009: Login page &amp; invalid error banner visual regression @visual" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [webkit] › login.spec.ts:214:7 › Authentication @auth › TC-AUTH-009: Login page & invalid error banner visual regression @visual 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+</testsuite>
+<testsuite name="login.spec.ts" timestamp="2026-11-13T23:14:35.191Z" hostname="Mobile Chrome" tests="4" failures="0" skipped="0" time="0" errors="4">
+<testcase name="Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Chrome] › login.spec.ts:79:7 › Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Chrome] › login.spec.ts:151:7 › Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Chrome] › login.spec.ts:187:7 › Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-009: Login page &amp; invalid error banner visual regression @visual" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Chrome] › login.spec.ts:214:7 › Authentication @auth › TC-AUTH-009: Login page & invalid error banner visual regression @visual 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+</testsuite>
+<testsuite name="login.spec.ts" timestamp="2026-11-13T23:14:35.191Z" hostname="Mobile Safari" tests="4" failures="0" skipped="0" time="0" errors="4">
+<testcase name="Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Safari] › login.spec.ts:79:7 › Authentication @auth › TC-AUTH-001: Valid Admin login redirects to Dashboard @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Safari] › login.spec.ts:151:7 › Authentication @auth › TC-AUTH-006: Logout terminates session and blocks protected route access @smoke @functional @e2e 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Safari] › login.spec.ts:187:7 › Authentication @auth › TC-AUTH-008: Authentication state saved to auth/auth.json and reused across context @smoke @auth-state 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+<testcase name="Authentication @auth › TC-AUTH-009: Login page &amp; invalid error banner visual regression @visual" classname="login.spec.ts" time="0">
+<error message="Cannot find module &apos;C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts&apos;" type="Error">
+<![CDATA[  [Mobile Safari] › login.spec.ts:214:7 › Authentication @auth › TC-AUTH-009: Login page & invalid error banner visual regression @visual 
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: Cannot find module 'C:\Users\ADMIN\Documents\OrangeHRM_Playwright\playwright.config.ts'
+    Require stack:
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\common\index.js
+    - C:\Users\ADMIN\Documents\OrangeHRM_Playwright\node_modules\playwright\lib\worker\workerProcessEntry.js
+]]>
+</error>
+</testcase>
+</testsuite>
+</testsuites>
