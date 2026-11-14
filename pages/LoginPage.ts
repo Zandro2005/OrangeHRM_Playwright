@@ -1,16 +1,18 @@
-import { Locator, Page } from '@playwright/test';
+import { expect, Locator, Page } from '@playwright/test';
 
 export class LoginPage {
   readonly page: Page;
   readonly usernameInput: Locator;
   readonly passwordInput: Locator;
   readonly loginButton: Locator;
+  readonly invalidCredentialsAlert: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.usernameInput = page.getByRole('textbox', { name: 'Username' });
     this.passwordInput = page.getByRole('textbox', { name: 'Password' });
     this.loginButton = page.getByRole('button', { name: 'Login' });
+    this.invalidCredentialsAlert = page.getByRole('alert');
   }
 
   /** Navigate to the login page, retrying transient demo server stalls or 5xx responses. */
@@ -59,5 +61,12 @@ export class LoginPage {
     await this.page.keyboard.press('Tab');
     await this.page.keyboard.type(password);
     await this.page.keyboard.press('Enter');
+  }
+
+  /** Assert the invalid credentials alert banner displays and URL stays on login. */
+  async expectInvalidCredentialsError(): Promise<void> {
+    await expect(this.page).toHaveURL(/\/auth\/login/);
+    await expect(this.invalidCredentialsAlert).toBeVisible();
+    await expect(this.invalidCredentialsAlert).toContainText('Invalid credentials');
   }
 }

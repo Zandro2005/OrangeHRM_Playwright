@@ -24,4 +24,13 @@ test.describe('Module 1: Authentication', () => {
       essUserConfig.expectedHiddenMenus
     );
   });
+
+  test('TC-AUTH-003: Invalid login with wrong password shows alert @negative @regression', async ({
+    loginPage,
+    adminCredentials,
+  }) => {
+    await loginPage.goto();
+    await loginPage.login(adminCredentials.username, `${adminCredentials.password}_invalid`);
+    await loginPage.expectInvalidCredentialsError();
+  });
 });
