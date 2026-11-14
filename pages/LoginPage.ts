@@ -48,4 +48,16 @@ export class LoginPage {
     await this.passwordInput.fill(password);
     await this.loginButton.click();
   }
+
+  /** Focus Username and submit credentials purely with Tab and Enter keys. */
+  async loginWithKeyboard(username: string, password: string): Promise<void> {
+    // Step 1: Focus Username explicitly and enter username via keyboard
+    await this.usernameInput.focus();
+    await this.page.keyboard.type(username);
+
+    // Step 2: Move focus to Password via Tab, type password, and submit with Enter
+    await this.page.keyboard.press('Tab');
+    await this.page.keyboard.type(password);
+    await this.page.keyboard.press('Enter');
+  }
 }

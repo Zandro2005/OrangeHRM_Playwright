@@ -10,4 +10,18 @@ test.describe('Module 1: Authentication', () => {
     await loginPage.login(adminCredentials.username, adminCredentials.password);
     await dashboardPage.expectLoaded();
   });
+
+  test('TC-AUTH-002: Valid ESS login & keyboard Enter submission @functional @e2e @rbac', async ({
+    loginPage,
+    dashboardPage,
+    essAccount,
+    essUserConfig,
+  }) => {
+    await loginPage.goto();
+    await loginPage.loginWithKeyboard(essAccount.username, essAccount.password);
+    await dashboardPage.expectEssViewLoaded(
+      essUserConfig.expectedVisibleMenus,
+      essUserConfig.expectedHiddenMenus
+    );
+  });
 });

@@ -1,10 +1,16 @@
 import { test as baseTest, expect } from './baseFixture';
+import {
+  AdminCredentials,
+  EssUserConfig,
+  SeededEssAccount,
+  loadUsersData,
+  seedEssAccount,
+} from '../utils/apiHelpers';
 
 export interface AuthFixtures {
-  adminCredentials: {
-    username: string;
-    password: string;
-  };
+  adminCredentials: AdminCredentials;
+  essUserConfig: EssUserConfig;
+  essAccount: SeededEssAccount;
 }
 
 export const test = baseTest.extend<AuthFixtures>({
@@ -19,6 +25,20 @@ export const test = baseTest.extend<AuthFixtures>({
     }
 
     await use({ username, password });
+  },
+
+  essUserConfig: async ({}, use) => {
+    await use(loadUsersData().essUser);
+  },
+
+  essAccount: async ({ browser, baseURL, adminCredentials, essUserConfig }, use) => {
+    // Seed a fresh ESS account per test and guarantee API cleanup in teardown
+    const account = await seedEssAccount(browser, adminCredentials, essUserConfig, baseURL);
+    try {
+      await use(account);
+    } finally {
+      await account.cleanup();
+    }
   },
 });
 
