@@ -9,13 +9,18 @@ const IS_CI = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: './tests',
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}{ext}',
   fullyParallel: true,
   forbidOnly: IS_CI,
   retries: IS_CI ? 2 : 1,
-  workers: IS_CI ? 2 : undefined,
+  workers: 2,
   timeout: 120_000,
   expect: {
     timeout: 25_000,
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.08,
+      animations: 'disabled',
+    },
   },
   reporter: [
     ['list'],
