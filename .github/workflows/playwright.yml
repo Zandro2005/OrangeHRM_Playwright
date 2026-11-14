@@ -35,15 +35,16 @@ jobs:
       - name: Checkout GitHub Repository
         uses: actions/checkout@v4
 
-      # Step 4: Install Node.js v22
+      # Step 4: Install Node.js v22 and cache npm downloads using package-lock.json
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
 
-      # Step 5: Install npm packages from package.json
+      # Step 5: Clean deterministic install from package-lock.json (sets Linux +x permissions on .bin)
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       # Step 6: Install the underlying browser engine & Linux OS deps for this matrix job
       - name: Install Playwright Browsers
