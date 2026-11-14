@@ -1,0 +1,12 @@
+{
+  "essUser": {
+    "role": "ESS",
+    "userRoleId": 2,
+    "status": true,
+    "firstName": "ESS",
+    "lastName": "Automation",
+    "usernamePrefix": "ess_auto",
+    "expectedVisibleMenus": ["Dashboard", "My Info"],
+    "expectedHiddenMenus": ["Admin", "Maintenance"]
+  }
+}
