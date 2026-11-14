@@ -18,7 +18,8 @@ export default defineConfig({
   expect: {
     timeout: 25_000,
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.08,
+      // Allow slightly higher variance on Linux CI vs Windows baselines from font rasterization on compact mobile viewports
+      maxDiffPixelRatio: IS_CI ? 0.15 : 0.08,
       animations: 'disabled',
     },
   },
