@@ -9,10 +9,16 @@ export interface AuthFixtures {
 
 export const test = baseTest.extend<AuthFixtures>({
   adminCredentials: async ({}, use) => {
-    await use({
-      username: process.env.ADMIN_USERNAME || 'Admin',
-      password: process.env.ADMIN_PASSWORD || 'admin123',
-    });
+    const username = process.env.ADMIN_USERNAME;
+    const password = process.env.ADMIN_PASSWORD;
+
+    if (!username || !password) {
+      throw new Error(
+        'Missing ADMIN_USERNAME or ADMIN_PASSWORD. Set them in .env locally or GitHub Secrets in CI.'
+      );
+    }
+
+    await use({ username, password });
   },
 });
 
