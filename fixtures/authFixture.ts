@@ -1,8 +1,11 @@
+import path from 'path';
 import { test as baseTest, expect } from './baseFixture';
 import {
   AdminCredentials,
   EssUserConfig,
+  InvalidLoginRow,
   SeededEssAccount,
+  ensureAuthStorageState,
   loadUsersData,
   seedEssAccount,
 } from '../utils/apiHelpers';
@@ -10,6 +13,8 @@ import {
 export interface AuthFixtures {
   adminCredentials: AdminCredentials;
   essUserConfig: EssUserConfig;
+  invalidLoginCases: InvalidLoginRow[];
+  storageStatePath: string;
   essAccount: SeededEssAccount;
 }
 
@@ -29,6 +34,16 @@ export const test = baseTest.extend<AuthFixtures>({
 
   essUserConfig: async ({}, use) => {
     await use(loadUsersData().essUser);
+  },
+
+  invalidLoginCases: async ({}, use) => {
+    await use(loadUsersData().invalidLogins);
+  },
+
+  storageStatePath: async ({ browser, baseURL, adminCredentials }, use) => {
+    const targetPath = path.resolve(__dirname, '../auth/auth.json');
+    await ensureAuthStorageState(browser, adminCredentials, targetPath, baseURL);
+    await use(targetPath);
   },
 
   essAccount: async ({ browser, baseURL, adminCredentials, essUserConfig }, use) => {

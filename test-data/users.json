@@ -8,5 +8,22 @@
     "usernamePrefix": "ess_auto",
     "expectedVisibleMenus": ["Dashboard", "My Info"],
     "expectedHiddenMenus": ["Admin", "Maintenance"]
-  }
+  },
+  "invalidLogins": [
+    {
+      "label": "non-existent user",
+      "username": "non_existent_user_999",
+      "password": "InvalidPassword!123"
+    },
+    {
+      "label": "wrong password case",
+      "username": "Admin",
+      "useWrongPasswordCase": true
+    },
+    {
+      "label": "special characters in credentials",
+      "username": "!@#$%^&*()_+",
+      "password": "<script>alert(1)</script>"
+    }
+  ]
 }
