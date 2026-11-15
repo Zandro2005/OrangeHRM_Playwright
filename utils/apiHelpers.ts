@@ -50,9 +50,9 @@ export async function gotoWithRetry(
   readyLocator?: Locator,
   options: GotoRetryOptions = {}
 ): Promise<void> {
-  const maxAttempts = options.maxAttempts ?? 4;
-  const navigationTimeoutMs = options.navigationTimeoutMs ?? 22_000;
-  const readyTimeoutMs = options.readyTimeoutMs ?? 20_000;
+  const maxAttempts = options.maxAttempts ?? 3;
+  const navigationTimeoutMs = options.navigationTimeoutMs ?? 38_000;
+  const readyTimeoutMs = options.readyTimeoutMs ?? 25_000;
 
   await withRetry(
     async () => {
@@ -256,6 +256,8 @@ export async function seedEssAccount(
   }
 }
 
+const SESSION_VALIDATION_TTL_MS = 1_200_000;
+
 async function hasActiveSession(
   browser: Browser,
   storageStatePath: string,
@@ -273,6 +275,12 @@ async function hasActiveSession(
     }
     JSON.parse(raw);
 
+    // Skip spawning an extra BrowserContext probe when auth/auth.json was recently validated
+    const stat = fs.statSync(storageStatePath);
+    if (Date.now() - stat.mtimeMs < SESSION_VALIDATION_TTL_MS) {
+      return true;
+    }
+
     checkContext = await browser.newContext({
       ...(baseURL ? { baseURL } : {}),
       storageState: storageStatePath,
@@ -284,7 +292,12 @@ async function hasActiveSession(
         }),
       { maxAttempts: 2, baseDelayMs: 1_000 }
     );
-    return res.status() === 200;
+    if (res.status() === 200) {
+      const now = new Date();
+      fs.utimesSync(storageStatePath, now, now);
+      return true;
+    }
+    return false;
   } catch {
     return false;
   } finally {

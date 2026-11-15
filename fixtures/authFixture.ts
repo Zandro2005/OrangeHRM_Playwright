@@ -1,11 +1,14 @@
 import path from 'path';
 import { test as baseTest, expect } from './baseFixture';
+import { DashboardPage } from '../pages/DashboardPage';
+import { LoginPage } from '../pages/LoginPage';
 import {
   AdminCredentials,
   EssUserConfig,
   InvalidLoginRow,
   SeededEssAccount,
   ensureAuthStorageState,
+  gotoWithRetry,
   loadUsersData,
   seedEssAccount,
 } from '../utils/apiHelpers';
@@ -16,6 +19,7 @@ export interface AuthFixtures {
   invalidLoginCases: InvalidLoginRow[];
   storageStatePath: string;
   essAccount: SeededEssAccount;
+  authenticatedDashboardPage: DashboardPage;
 }
 
 export const test = baseTest.extend<AuthFixtures>({
@@ -53,6 +57,44 @@ export const test = baseTest.extend<AuthFixtures>({
       await use(account);
     } finally {
       await account.cleanup();
+    }
+  },
+
+  authenticatedDashboardPage: async (
+    { browser, baseURL, storageStatePath, adminCredentials, telemetry },
+    use
+  ) => {
+    const context = await browser.newContext({
+      ...(baseURL ? { baseURL } : {}),
+      storageState: storageStatePath,
+    });
+
+    try {
+      const page = await context.newPage();
+      telemetry.attach(page);
+
+      const dashboardPage = new DashboardPage(page);
+      const loginPage = new LoginPage(page);
+
+      // Re-authenticate automatically if the shared demo server invalidates auth/auth.json mid-run
+      dashboardPage.goto = async (maxAttempts = 4): Promise<void> => {
+        await gotoWithRetry(
+          page,
+          '/web/index.php/dashboard/index',
+          dashboardPage.pageHeading.or(loginPage.usernameInput),
+          { maxAttempts }
+        );
+
+        if (page.url().includes('/auth/login')) {
+          await loginPage.login(adminCredentials.username, adminCredentials.password);
+          await dashboardPage.expectLoaded();
+          await context.storageState({ path: storageStatePath }).catch(() => undefined);
+        }
+      };
+
+      await use(dashboardPage);
+    } finally {
+      await context.close();
     }
   },
 });
