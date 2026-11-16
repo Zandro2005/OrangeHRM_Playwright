@@ -1,5 +1,5 @@
 import { expect, Locator, Page } from '@playwright/test';
-import { gotoWithRetry, withRetry } from '../utils/apiHelpers';
+import { gotoWithRetry, resetOrangeHrmThemeVariables, withRetry } from '../utils/apiHelpers';
 
 export type LoginField = 'Username' | 'Password';
 
@@ -199,6 +199,7 @@ export class LoginPage {
   /** Wait for web fonts and branding images before visual snapshot comparison. */
   async waitForVisualStability(): Promise<void> {
     await this.usernameInput.waitFor({ state: 'visible' });
+    await resetOrangeHrmThemeVariables(this.page);
     await this.page.evaluate(async () => {
       await document.fonts.ready;
       const pendingImages = Array.from(document.images).filter((img) => !img.complete);

@@ -9,7 +9,7 @@
     "test:smoke": "playwright test --grep @smoke",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "typecheck": "tsc --noEmit --strict --esModuleInterop --moduleResolution node --target es2022 tests/login.spec.ts playwright.config.ts",
+    "typecheck": "tsc --noEmit --strict --esModuleInterop --moduleResolution node --target es2022 tests/login.spec.ts tests/dashboard.spec.ts playwright.config.ts",
     "report": "playwright show-report"
   },
   "devDependencies": {
