@@ -1,5 +1,5 @@
 import { expect, Locator, Page } from '@playwright/test';
-import { gotoWithRetry, withRetry } from '../utils/apiHelpers';
+import { gotoWithRetry, resetOrangeHrmThemeVariables, withRetry } from '../utils/apiHelpers';
 
 export class DashboardPage {
   static readonly CORE_WIDGET_TITLES = [
@@ -387,6 +387,7 @@ export class DashboardPage {
   /** Wait until Dashboard chrome, spinners, web fonts, and images stabilize for screenshot diffing. */
   async waitForVisualStability(): Promise<void> {
     await this.waitForDashboardIdle();
+    await resetOrangeHrmThemeVariables(this.page);
     await this.page.evaluate(async () => {
       await document.fonts.ready;
       const pendingImages = Array.from(document.images).filter((img) => !img.complete);

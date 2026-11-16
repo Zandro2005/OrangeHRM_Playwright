@@ -337,3 +337,44 @@ export async function ensureAuthStorageState(
     await adminContext.close();
   }
 }
+
+/**
+ * Override public demo server Corporate Branding customizations so visual regression
+ * baselines remain deterministic even when shared users change the demo site's theme.
+ */
+export async function resetOrangeHrmThemeVariables(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const styleId = 'pw-default-theme';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+      :root {
+        --oxd-primary-one-color: #ff7b1d !important;
+        --oxd-primary-font-color: #ffffff !important;
+        --oxd-secondary-four-color: #76bc21 !important;
+        --oxd-secondary-font-color: #ffffff !important;
+        --oxd-primary-gradient-start-color: #ff920b !important;
+        --oxd-primary-gradient-end-color: #f35c17 !important;
+        --oxd-secondary-gradient-start-color: #ff920b !important;
+        --oxd-secondary-gradient-end-color: #f35c17 !important;
+        --oxd-primary-one-lighten-5-color: #ff8a37 !important;
+        --oxd-primary-one-lighten-30-color: #ffd4b6 !important;
+        --oxd-primary-one-darken-5-color: #ff6c04 !important;
+        --oxd-primary-one-alpha-10-color: rgba(255, 123, 29, 0.1) !important;
+        --oxd-primary-one-alpha-15-color: rgba(255, 123, 29, 0.15) !important;
+        --oxd-primary-one-alpha-20-color: rgba(255, 123, 29, 0.2) !important;
+        --oxd-primary-one-alpha-50-color: rgba(255, 123, 29, 0.5) !important;
+        --oxd-secondary-four-lighten-5-color: #84d225 !important;
+        --oxd-secondary-four-darken-5-color: #68a61d !important;
+        --oxd-secondary-four-alpha-10-color: rgba(118, 188, 33, 0.1) !important;
+        --oxd-secondary-four-alpha-15-color: rgba(118, 188, 33, 0.15) !important;
+        --oxd-secondary-four-alpha-20-color: rgba(118, 188, 33, 0.2) !important;
+        --oxd-secondary-four-alpha-50-color: rgba(118, 188, 33, 0.5) !important;
+      }
+    `;
+  });
+}
