@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { APIResponse, Browser, BrowserContext, Locator, Page } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
+import { generateEmployeeData, GeneratedEmployeeInput } from './testDataGenerator';
 
 export interface RetryOptions {
   maxAttempts?: number;
@@ -75,21 +76,40 @@ export async function gotoWithRetry(
   );
 }
 
-async function apiPostWithRetry(
+async function apiWriteWithRetry(
+  method: 'post' | 'put',
   context: BrowserContext,
   url: string,
   data: Record<string, unknown>
 ): Promise<APIResponse> {
   return withRetry(
     async () => {
-      const res = await context.request.post(url, { timeout: 25_000, data });
+      const res = await context.request[method](url, { timeout: 25_000, data });
       if (res.status() >= 500) {
-        throw new Error(`POST ${url} returned HTTP ${res.status()}`);
+        throw new Error(`${method.toUpperCase()} ${url} returned HTTP ${res.status()}`);
       }
       return res;
     },
     { maxAttempts: 4, baseDelayMs: 1_500 }
   );
+}
+
+/** Send a POST request with retry handling for transient HTTP 5xx/network errors. */
+export async function apiPostWithRetry(
+  context: BrowserContext,
+  url: string,
+  data: Record<string, unknown>
+): Promise<APIResponse> {
+  return apiWriteWithRetry('post', context, url, data);
+}
+
+/** Send a PUT request with retry handling for transient HTTP 5xx/network errors. */
+export async function apiPutWithRetry(
+  context: BrowserContext,
+  url: string,
+  data: Record<string, unknown>
+): Promise<APIResponse> {
+  return apiWriteWithRetry('put', context, url, data);
 }
 
 export interface AdminCredentials {
@@ -175,6 +195,76 @@ async function authenticateAdminContext(
   );
 }
 
+export interface SeededEmployee {
+  empNumber: number;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  employeeId: string;
+  jobTitle?: string;
+  empStatus?: string;
+  subunit?: string;
+  cleanup: () => Promise<void>;
+}
+
+export interface SeedEmployeeOptions extends Partial<GeneratedEmployeeInput> {
+  assignJobDetails?: boolean;
+}
+
+async function safeDeleteRecord(
+  context: BrowserContext,
+  endpoint: string,
+  id: number,
+  label: string
+): Promise<void> {
+  try {
+    const res = await context.request.delete(endpoint, { timeout: 25_000, data: { ids: [id] } });
+    // Treat 404 as already deleted during teardown
+    if (!res.ok() && res.status() !== 404) {
+      console.warn(`Cleanup warning: failed to delete ${label} ${id} (${res.status()})`);
+    }
+  } catch (error) {
+    console.warn(`Cleanup warning: ${label} ${id} deletion errored:`, error);
+  }
+}
+
+async function createValidatedAdminApiContext(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string
+): Promise<BrowserContext> {
+  const storageStatePath = path.resolve(__dirname, '../auth/auth.json');
+  await ensureAuthStorageState(browser, adminCredentials, storageStatePath, baseURL);
+
+  const cachedContext = await browser.newContext({
+    ...(baseURL ? { baseURL } : {}),
+    storageState: storageStatePath,
+  });
+
+  const probe = await withRetry(
+    () =>
+      cachedContext.request.get('/web/index.php/api/v2/dashboard/shortcuts', {
+        timeout: 20_000,
+      }),
+    { maxAttempts: 2, baseDelayMs: 1_000 }
+  ).catch(() => undefined);
+
+  if (probe && probe.status() === 200) {
+    return cachedContext;
+  }
+
+  // Fallback to a fresh UI login if the demo server invalidated auth/auth.json within TTL
+  await cachedContext.close().catch(() => undefined);
+  if (fs.existsSync(storageStatePath)) {
+    fs.rmSync(storageStatePath, { force: true });
+  }
+  await ensureAuthStorageState(browser, adminCredentials, storageStatePath, baseURL);
+  return browser.newContext({
+    ...(baseURL ? { baseURL } : {}),
+    storageState: storageStatePath,
+  });
+}
+
 /** Seed a disposable employee and linked ESS login account via Admin REST APIs. */
 export async function seedEssAccount(
   browser: Browser,
@@ -187,31 +277,25 @@ export async function seedEssAccount(
   const username = `${essConfig.usernamePrefix}_${suffix}`;
   const password = generateTempPassword(suffix);
 
-  const adminContext = await authenticateAdminContext(browser, adminCredentials, baseURL);
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
   let empNumber: number | undefined;
   let userId: number | undefined;
-
-  const safeDelete = async (endpoint: string, id: number, label: string): Promise<void> => {
-    try {
-      const res = await adminContext.request.delete(endpoint, { data: { ids: [id] } });
-      if (!res.ok()) {
-        console.warn(`Cleanup warning: failed to delete ${label} ${id} (${res.status()})`);
-      }
-    } catch (error) {
-      console.warn(`Cleanup warning: ${label} ${id} deletion errored:`, error);
-    }
-  };
 
   const cleanup = async (): Promise<void> => {
     try {
       if (userId !== undefined) {
-        await safeDelete('/web/index.php/api/v2/admin/users', userId, 'user');
+        await safeDeleteRecord(adminContext, '/web/index.php/api/v2/admin/users', userId, 'user');
       }
       if (empNumber !== undefined) {
-        await safeDelete('/web/index.php/api/v2/pim/employees', empNumber, 'employee');
+        await safeDeleteRecord(
+          adminContext,
+          '/web/index.php/api/v2/pim/employees',
+          empNumber,
+          'employee'
+        );
       }
     } finally {
-      await adminContext.close();
+      await adminContext.close().catch(() => undefined);
     }
   };
 
@@ -253,6 +337,201 @@ export async function seedEssAccount(
   } catch (error) {
     await cleanup();
     throw error;
+  }
+}
+
+/** Seed a disposable PIM employee via REST API (optionally populating Job Details) with guaranteed teardown. */
+export async function seedEmployee(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string,
+  options: SeedEmployeeOptions = {}
+): Promise<SeededEmployee> {
+  const generated = generateEmployeeData();
+  const firstName = options.firstName ?? generated.firstName;
+  const middleName = options.middleName ?? generated.middleName;
+  const lastName = options.lastName ?? generated.lastName;
+  const employeeId = options.employeeId ?? generated.employeeId;
+
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  let empNumber: number | undefined;
+
+  const cleanup = async (): Promise<void> => {
+    try {
+      if (empNumber !== undefined) {
+        await safeDeleteRecord(
+          adminContext,
+          '/web/index.php/api/v2/pim/employees',
+          empNumber,
+          'employee'
+        );
+      }
+    } finally {
+      await adminContext.close().catch(() => undefined);
+    }
+  };
+
+  try {
+    const empRes = await apiPostWithRetry(adminContext, '/web/index.php/api/v2/pim/employees', {
+      firstName,
+      middleName,
+      lastName,
+      employeeId,
+    });
+    if (!empRes.ok()) {
+      throw new Error(`Failed to seed employee (${empRes.status()}): ${await empRes.text()}`);
+    }
+    const empBody = (await empRes.json()) as { data?: { empNumber?: number } };
+    empNumber = empBody.data?.empNumber;
+    if (!empNumber) {
+      throw new Error('Employee seeding succeeded without returning an empNumber.');
+    }
+
+    let jobTitle: string | undefined;
+    let empStatus: string | undefined;
+    let subunit: string | undefined;
+
+    if (options.assignJobDetails) {
+      const [statusesRes, titlesRes, subunitsRes] = await Promise.all([
+        adminContext.request.get('/web/index.php/api/v2/admin/employment-statuses?limit=5', {
+          timeout: 20_000,
+        }),
+        adminContext.request.get('/web/index.php/api/v2/admin/job-titles?limit=5', {
+          timeout: 20_000,
+        }),
+        adminContext.request.get('/web/index.php/api/v2/admin/subunits', { timeout: 20_000 }),
+      ]);
+
+      const statusesJson = statusesRes.ok()
+        ? ((await statusesRes.json()) as { data?: Array<{ id: number; name: string }> })
+        : {};
+      const titlesJson = titlesRes.ok()
+        ? ((await titlesRes.json()) as { data?: Array<{ id: number; title: string }> })
+        : {};
+      const subunitsJson = subunitsRes.ok()
+        ? ((await subunitsRes.json()) as {
+            data?: Array<{ id: number; name: string; level: number }>;
+          })
+        : {};
+
+      const statusItem = statusesJson.data?.[0];
+      const titleItem = titlesJson.data?.[0];
+      const subunitItem =
+        subunitsJson.data?.find((s) => s.level > 0) ?? subunitsJson.data?.[0];
+
+      const jobRes = await apiPutWithRetry(
+        adminContext,
+        `/web/index.php/api/v2/pim/employees/${empNumber}/job-details`,
+        {
+          joinedDate: '2025-01-15',
+          ...(titleItem ? { jobTitleId: titleItem.id } : {}),
+          ...(statusItem ? { empStatusId: statusItem.id } : {}),
+          ...(subunitItem ? { subunitId: subunitItem.id } : {}),
+        }
+      );
+
+      if (jobRes.ok()) {
+        jobTitle = titleItem?.title;
+        empStatus = statusItem?.name;
+        subunit = subunitItem?.name;
+      }
+    }
+
+    return {
+      empNumber,
+      firstName,
+      middleName,
+      lastName,
+      employeeId,
+      jobTitle,
+      empStatus,
+      subunit,
+      cleanup,
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+}
+
+/** Delete an employee record by empNumber via the Admin REST API (best-effort teardown). */
+export async function deleteEmployeeByEmpNumber(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  empNumber: number,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    await safeDeleteRecord(
+      adminContext,
+      '/web/index.php/api/v2/pim/employees',
+      empNumber,
+      'employee'
+    );
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+/** Look up any employee(s) matching an Employee Id string and delete them via Admin REST API. */
+export async function deleteEmployeeByIdIfPresent(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  employeeId: string,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await adminContext.request.get(
+      `/web/index.php/api/v2/pim/employees?employeeId=${encodeURIComponent(employeeId)}`,
+      { timeout: 20_000 }
+    );
+    if (!res.ok()) {
+      return;
+    }
+    const body = (await res.json()) as {
+      data?: Array<{ empNumber?: number; employeeId?: string }>;
+    };
+    const matchingIds = (body.data ?? [])
+      .filter((row) => row.employeeId === employeeId && typeof row.empNumber === 'number')
+      .map((row) => row.empNumber as number);
+    if (matchingIds.length > 0) {
+      await adminContext.request
+        .delete('/web/index.php/api/v2/pim/employees', { data: { ids: matchingIds } })
+        .catch(() => undefined);
+    }
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+/** Verify via GET API that a deleted employee record no longer exists (404 / empty record). */
+export async function verifyEmployeeDeletedViaApi(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  empNumber: number,
+  baseURL?: string
+): Promise<boolean> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(`/web/index.php/api/v2/pim/employees/${empNumber}`, {
+          timeout: 20_000,
+        }),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (res.status() === 404 || res.status() === 422) {
+      return true;
+    }
+    if (!res.ok()) {
+      return false;
+    }
+    const body = (await res.json()) as { data?: { empNumber?: number } | null };
+    return !body.data?.empNumber;
+  } finally {
+    await adminContext.close().catch(() => undefined);
   }
 }
 
