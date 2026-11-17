@@ -96,10 +96,9 @@ export class EmployeePage {
 
   /** Clear any asynchronously populated input before typing a deterministic value. */
   private async clearAndFill(input: Locator, value: string): Promise<void> {
-    await input.scrollIntoViewIfNeeded();
     await expect(input).toBeVisible();
     await expect(input).toBeEnabled();
-    await input.click();
+    await input.focus();
     await input.press('ControlOrMeta+a');
     await input.press('Backspace');
     if (value.length > 0) {
@@ -148,6 +147,7 @@ export class EmployeePage {
       { maxAttempts }
     );
     await this.waitForSpinnerToClear();
+    await expect(this.firstNameInput).not.toHaveValue('', { timeout: 25_000 });
   }
 
   /** Fill mandatory Add Employee fields cleanly. */
@@ -334,6 +334,7 @@ export class EmployeePage {
   /** Update Personal Details fields and save, waiting for confirmation toast. */
   async updatePersonalDetails(details: PersonalDetailsUpdateInput): Promise<void> {
     await this.waitForSpinnerToClear();
+    await expect(this.firstNameInput).not.toHaveValue('', { timeout: 25_000 });
     await this.clearAndFill(this.middleNameInput, details.middleName);
 
     const licenseInput = this.inputGroupByLabel("Driver's License Number").locator('input');
@@ -345,6 +346,13 @@ export class EmployeePage {
       dobInput,
       this.formatDateForPlaceholder(details.dateOfBirth, dobPlaceholder)
     );
+    await dobInput.blur();
+
+    const calendarPopover = this.page.locator('.oxd-date-input-calendar');
+    if (await calendarPopover.isVisible()) {
+      await this.page.locator('.oxd-date-input-link.--close').click();
+      await expect(calendarPopover).toBeHidden();
+    }
 
     const personalFormSave = this.page.locator('form.oxd-form').first().locator('button[type="submit"]');
     await personalFormSave.scrollIntoViewIfNeeded();
@@ -396,6 +404,7 @@ export class EmployeePage {
     dateOfBirth?: string;
   }): Promise<void> {
     await this.waitForSpinnerToClear();
+    await expect(this.firstNameInput).not.toHaveValue('', { timeout: 25_000 });
     await expect(this.firstNameInput).toHaveValue(expected.firstName);
     await expect(this.lastNameInput).toHaveValue(expected.lastName);
     await expect(this.inputGroupByLabel('Employee Id').locator('input')).toHaveValue(
@@ -617,12 +626,13 @@ export class EmployeePage {
         width: 1024,
         height: originalViewport?.height ?? 851,
       });
+      await expect(this.page.locator('.oxd-table-card.--mobile')).toHaveCount(0);
+      await expect(this.tableRows.first().locator('.oxd-checkbox-input')).toBeVisible();
     }
 
     try {
       for (const employeeId of employeeIds) {
         const row = this.rowByEmployeeId(employeeId);
-        await row.scrollIntoViewIfNeeded();
         await expect(row).toBeVisible();
         const checkbox = row.locator('.oxd-checkbox-input');
         await expect(checkbox).toBeVisible();
