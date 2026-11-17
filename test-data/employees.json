@@ -1,0 +1,26 @@
+{
+  "nonExistentEmployeeId": "99999999",
+  "personalDetailsUpdate": {
+    "middleName": "Alex",
+    "licenseNumber": "DL-904210",
+    "licenseExpiryDate": "2028-12-31",
+    "dateOfBirth": "1994-06-15"
+  },
+  "contactDetailsUpdate": {
+    "street1": "742 Evergreen Terrace",
+    "city": "Springfield",
+    "stateProvince": "IL",
+    "zipCode": "62704",
+    "mobile": "5550192834",
+    "workEmailPrefix": "pim.contact"
+  },
+  "invalidData": {
+    "weakPassword": "short",
+    "mismatchedPasswordA": "ValidPass!123",
+    "mismatchedPasswordB": "DifferentPass!999",
+    "invalidFileName": "invalid-photo.txt",
+    "invalidFileMime": "text/plain",
+    "oversizedFileName": "oversized-photo.png",
+    "oversizedFileBytes": 1200000
+  }
+}
