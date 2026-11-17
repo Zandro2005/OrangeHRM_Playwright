@@ -294,6 +294,19 @@ export class EmployeePage {
 
   /** Switch to a profile sub-tab (`Personal Details`, `Contact Details`, `Job`) and wait until ready. */
   async openProfileTab(tabName: 'Personal Details' | 'Contact Details' | 'Job'): Promise<void> {
+    const apiKeyword =
+      tabName === 'Personal Details'
+        ? 'personal-details'
+        : tabName === 'Contact Details'
+          ? 'contact-details'
+          : 'job-details';
+    const dataHydratedPromise = this.page
+      .waitForResponse(
+        (res) => res.request().method() === 'GET' && res.url().includes(apiKeyword),
+        { timeout: 30_000 }
+      )
+      .catch(() => undefined);
+
     const tab = this.page
       .locator('.orangehrm-tabs-item')
       .filter({ hasText: new RegExp(`^\\s*${tabName}\\s*$`) })
@@ -309,7 +322,11 @@ export class EmployeePage {
           ? /\/pim\/contactDetails/
           : /\/pim\/viewJobDetails/;
     await this.page.waitForURL(urlPattern, { waitUntil: 'domcontentloaded', timeout: 35_000 });
+    await dataHydratedPromise;
     await this.waitForSpinnerToClear();
+    await this.page.evaluate(
+      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+    );
   }
 
   /** Format a `YYYY-MM-DD` date string to match OrangeHRM's active localization placeholder. */
@@ -364,12 +381,22 @@ export class EmployeePage {
   /** Update Contact Details fields and save, waiting for confirmation toast. */
   async updateContactDetails(details: ContactDetailsUpdateInput): Promise<void> {
     await this.waitForSpinnerToClear();
-    await this.clearAndFill(this.inputGroupByLabel('Street 1').locator('input'), details.street1);
-    await this.clearAndFill(this.inputGroupByLabel('City').locator('input'), details.city);
-    await this.clearAndFill(
-      this.inputGroupByLabel('Work Email').locator('input'),
-      details.workEmail
-    );
+    const fields: Array<[Locator, string]> = [
+      [this.inputGroupByLabel('Street 1').locator('input'), details.street1],
+      [this.inputGroupByLabel('City').locator('input'), details.city],
+      [this.inputGroupByLabel('Work Email').locator('input'), details.workEmail],
+    ];
+
+    for (const [input, value] of fields) {
+      await this.clearAndFill(input, value);
+    }
+    // Re-apply any field wiped by a late Vue onMounted() API hydration callback before submitting
+    for (const [input, value] of fields) {
+      if ((await input.inputValue()) !== value) {
+        await this.clearAndFill(input, value);
+      }
+      await expect(input).toHaveValue(value);
+    }
 
     const saveBtn = this.page.locator('form.oxd-form').first().locator('button[type="submit"]');
     await saveBtn.scrollIntoViewIfNeeded();
