@@ -3,13 +3,18 @@ import { BrowserContext, Locator, Page } from '@playwright/test';
 import { test as authTest, expect } from './authFixture';
 import { EmployeePage } from '../pages/EmployeePage';
 import { LoginPage } from '../pages/LoginPage';
+import { ReportsPage } from '../pages/ReportsPage';
 import { UsersPage } from '../pages/UsersPage';
 import {
   SeededEmployee,
+  SeededReport,
   SeededSystemUser,
+  deleteDefinedReportById,
+  deleteDefinedReportByNameIfPresent,
   deleteEmployeeByEmpNumber,
   deleteSystemUserByUsernameIfPresent,
   gotoWithRetry,
+  seedDefinedReport,
   seedEmployee,
   seedSystemUser,
 } from '../utils/apiHelpers';
@@ -17,6 +22,7 @@ import {
 export interface AdminFixtures {
   employeePage: EmployeePage;
   usersPage: UsersPage;
+  reportsPage: ReportsPage;
   seededEmployee: SeededEmployee;
   seededEmployeeWithJob: SeededEmployee;
   seededEmployeePair: { batchTag: string; first: SeededEmployee; second: SeededEmployee };
@@ -28,8 +34,11 @@ export interface AdminFixtures {
     first: SeededSystemUser;
     second: SeededSystemUser;
   };
+  seededReport: SeededReport;
   registerDisposableEmployee: (empNumber: number) => void;
   registerDisposableUsername: (username: string) => void;
+  registerDisposableReportId: (reportId: number) => void;
+  registerDisposableReportName: (name: string) => void;
 }
 
 async function openAdminSessionContext(
@@ -150,6 +159,65 @@ export const test = authTest.extend<AdminFixtures>({
         );
 
       await use(usersPage);
+    } finally {
+      await context.close().catch(() => undefined);
+    }
+  },
+
+  reportsPage: async (
+    { browser, baseURL, storageStatePath, adminCredentials, telemetry },
+    use
+  ) => {
+    const { context, page, navigateWithReauth } = await openAdminSessionContext(
+      browser,
+      baseURL,
+      storageStatePath,
+      adminCredentials,
+      telemetry
+    );
+
+    try {
+      const reportsPage = new ReportsPage(page);
+      const clearSpinners = () => reportsPage.waitForSpinnerToClear();
+
+      reportsPage.gotoDashboard = async () =>
+        navigateWithReauth(
+          '/web/index.php/dashboard/index',
+          page.getByRole('heading', { name: 'Dashboard' }),
+          clearSpinners
+        );
+      reportsPage.gotoReportsList = async () =>
+        navigateWithReauth(
+          '/web/index.php/pim/viewDefinedPredefinedReports',
+          reportsPage.filterSection,
+          clearSpinners
+        );
+      reportsPage.gotoAddReport = async () =>
+        navigateWithReauth(
+          '/web/index.php/pim/definePredefinedReport',
+          reportsPage.saveButton,
+          clearSpinners
+        );
+      reportsPage.gotoEditReport = async (reportId: number) =>
+        navigateWithReauth(
+          `/web/index.php/pim/definePredefinedReport/${reportId}`,
+          reportsPage.saveButton,
+          async () => {
+            await clearSpinners();
+            await expect(reportsPage.inputGroupByLabel('Report Name').locator('input')).not.toHaveValue(
+              '',
+              { timeout: 25_000 }
+            );
+          }
+        );
+      reportsPage.gotoDisplayReport = async (reportId: number) =>
+        navigateWithReauth(
+          `/web/index.php/pim/displayPredefinedReport/${reportId}`,
+          reportsPage.reportTitleHeading,
+          clearSpinners
+        );
+
+      await use(reportsPage);
     } finally {
       await context.close().catch(() => undefined);
     }
@@ -279,6 +347,45 @@ export const test = authTest.extend<AdminFixtures>({
         username,
         baseURL
       ).catch((err) => console.warn(`Cleanup warning: failed to delete UI user ${username}:`, err));
+    }
+  },
+
+  seededReport: async ({ browser, baseURL, adminCredentials }, use) => {
+    const seeded = await seedDefinedReport(browser, adminCredentials, baseURL);
+    try {
+      await use(seeded);
+    } finally {
+      await seeded.cleanup();
+    }
+  },
+
+  registerDisposableReportId: async ({ browser, baseURL, adminCredentials }, use) => {
+    const createdReportIds = new Set<number>();
+    await use((reportId: number) => {
+      if (reportId > 0) {
+        createdReportIds.add(reportId);
+      }
+    });
+
+    for (const reportId of createdReportIds) {
+      await deleteDefinedReportById(browser, adminCredentials, reportId, baseURL).catch((err) =>
+        console.warn(`Cleanup warning: failed to delete UI report ${reportId}:`, err)
+      );
+    }
+  },
+
+  registerDisposableReportName: async ({ browser, baseURL, adminCredentials }, use) => {
+    const createdReportNames = new Set<string>();
+    await use((name: string) => {
+      if (name.trim().length > 0) {
+        createdReportNames.add(name.trim());
+      }
+    });
+
+    for (const name of createdReportNames) {
+      await deleteDefinedReportByNameIfPresent(browser, adminCredentials, name, baseURL).catch(
+        (err) => console.warn(`Cleanup warning: failed to delete UI report ${name}:`, err)
+      );
     }
   },
 });
