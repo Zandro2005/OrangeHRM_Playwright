@@ -289,10 +289,21 @@ async function createValidatedAdminApiContext(
   ).catch(() => undefined);
 
   if (probe && probe.status() === 200) {
+    try {
+      const now = new Date();
+      fs.utimesSync(storageStatePath, now, now);
+    } catch {
+      // Ignore mtime refresh races across parallel workers
+    }
     return cachedContext;
   }
 
-  // Fallback to a fresh UI login if the demo server invalidated auth/auth.json within TTL
+  // Return cachedContext on transient timeouts or non-auth errors so callers' retry loops recover without wiping cookies
+  if (!probe || (probe.status() !== 401 && probe.status() !== 403)) {
+    return cachedContext;
+  }
+
+  // Fallback to a fresh UI login only when the demo server invalidated auth/auth.json (401/403)
   await cachedContext.close().catch(() => undefined);
   if (fs.existsSync(storageStatePath)) {
     fs.rmSync(storageStatePath, { force: true });

@@ -149,14 +149,16 @@ export class ReportsPage {
       return chosen;
     }
 
-    // Wait for asynchronously fetched dropdown options (beyond "-- Select --") to populate
-    await expect(options.nth(1)).toBeVisible({ timeout: 20_000 });
-    const chosenOption = options.nth(1);
-    const chosen = ((await chosenOption.textContent()) ?? '').trim();
-    await chosenOption.click();
+    // Wait for asynchronously fetched dropdown options (beyond placeholder items) to populate
+    const firstRealOption = options
+      .filter({ hasNotText: /-- Select --|No Records Found|Searching|Loading/i })
+      .first();
+    await expect(firstRealOption).toBeVisible({ timeout: 20_000 });
+    await firstRealOption.click();
     await expect(dropdown).toBeHidden();
-    await expect(group.locator('.oxd-select-text-input')).toHaveText(chosen);
-    return chosen;
+    const selectedLabel = group.locator('.oxd-select-text-input');
+    await expect(selectedLabel).not.toHaveText('-- Select --');
+    return ((await selectedLabel.textContent()) ?? '').trim();
   }
 
   /** Navigate to Dashboard before traversing PIM -> Reports via UI navigation. */
@@ -168,6 +170,7 @@ export class ReportsPage {
       { maxAttempts }
     );
     await this.waitForSpinnerToClear();
+    await this.page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
   }
 
   /** Navigate directly to PIM -> Reports list and wait for table load. */
@@ -219,6 +222,9 @@ export class ReportsPage {
 
   /** Navigate via the UI from Dashboard -> PIM -> Reports across desktop & mobile layouts. */
   async navigateViaPimReportsMenu(): Promise<void> {
+    // Allow current page fonts and background requests to settle so Firefox does not log NS_BINDING_ABORTED errors
+    await this.page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
+
     const mobileMenuBtn = this.page.locator('.oxd-topbar-header-hamburger');
     const pimLink = this.page.getByRole('link', { name: 'PIM', exact: true });
 
@@ -230,18 +236,21 @@ export class ReportsPage {
     await this.page.waitForURL(/\/pim\//, { waitUntil: 'domcontentloaded', timeout: 35_000 });
     await this.waitForSpinnerToClear();
 
-    const reportsTopNavLink = this.page
-      .locator('.oxd-topbar-body-nav')
-      .getByRole('link', { name: 'Reports', exact: true });
+    const topbarNav = this.page.locator('.oxd-topbar-body-nav');
+    await expect(topbarNav.locator('.oxd-topbar-body-nav-tab').first()).toBeVisible({
+      timeout: 25_000,
+    });
+    await this.page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
+
+    const reportsTopNavLink = topbarNav.getByRole('link', { name: 'Reports', exact: true });
 
     if (!(await reportsTopNavLink.isVisible())) {
-      const moreToggle = this.page
+      const moreToggle = topbarNav
         .locator('.oxd-topbar-body-nav-tab')
         .filter({ hasText: 'More' })
         .first();
-      if (await moreToggle.isVisible()) {
-        await moreToggle.click();
-      }
+      await expect(moreToggle).toBeVisible();
+      await moreToggle.click();
     }
 
     await expect(reportsTopNavLink).toBeVisible();
@@ -252,6 +261,7 @@ export class ReportsPage {
     });
     await expect(this.filterSection).toBeVisible();
     await this.waitForSpinnerToClear();
+    await this.page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
   }
 
   /** Return the Defined Reports table row/card containing `reportName`. */
@@ -294,6 +304,13 @@ export class ReportsPage {
       { hasText: 'No Records Found' }
     );
     await expect(noRecordsOption).toBeVisible({ timeout: 20_000 });
+
+    // Dismiss the autocomplete listbox so it does not cover Search on compact mobile viewports
+    await input.press('Escape');
+    await input.blur();
+    if (await nameGroup.locator('.oxd-autocomplete-dropdown').isVisible()) {
+      await this.filterSection.locator('h5').first().click();
+    }
 
     await this.searchButton.scrollIntoViewIfNeeded();
     await this.searchButton.click();
@@ -510,12 +527,14 @@ export class ReportsPage {
   /** Save Add/Edit Report, assert success toast, wait for Display Report redirect, and return reportId. */
   async saveReportAndCaptureId(): Promise<number> {
     await this.saveButton.scrollIntoViewIfNeeded();
-    await this.saveButton.click();
-    await this.expectSuccessToast(/Successfully Saved|Successfully Updated/i);
-    await this.page.waitForURL(/\/pim\/displayPredefinedReport\/\d+/, {
-      waitUntil: 'domcontentloaded',
-      timeout: 35_000,
-    });
+    await Promise.all([
+      this.expectSuccessToast(/Successfully Saved|Successfully Updated/i),
+      this.page.waitForURL(/\/pim\/displayPredefinedReport\/\d+/, {
+        waitUntil: 'domcontentloaded',
+        timeout: 35_000,
+      }),
+      this.saveButton.click(),
+    ]);
     const match = this.page.url().match(/\/displayPredefinedReport\/(\d+)/);
     if (!match) {
       throw new Error(`Could not extract reportId from URL: ${this.page.url()}`);

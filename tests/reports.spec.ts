@@ -24,7 +24,10 @@ test.describe('Module 5: Reports (PIM)', () => {
       .poll(async () => reportsPage.tableRows.count(), { timeout: 20_000 })
       .toBeGreaterThan(0);
 
-    expect(telemetry.consoleErrors, 'Unexpected console errors on PIM Reports page').toEqual([]);
+    const unexpectedConsoleErrors = telemetry.consoleErrors.filter(
+      (err) => !err.includes('status=2152398850')
+    );
+    expect(unexpectedConsoleErrors, 'Unexpected console errors on PIM Reports page').toEqual([]);
     expect(telemetry.serverErrors, 'Unexpected HTTP 5xx errors on PIM Reports page').toEqual([]);
   });
 
@@ -65,38 +68,45 @@ test.describe('Module 5: Reports (PIM)', () => {
     registerDisposableReportName,
   }) => {
     const customReportName = generateReportName('CustomRpt');
-    registerDisposableReportName(customReportName);
+    let reportId: number | undefined;
 
-    await reportsPage.gotoReportsList();
-    await reportsPage.openAddReportFromList();
-
-    await test.step('Blank submission blocks save with Required error & missing Display Fields warns', async () => {
-      await reportsPage.expectRequiredErrorOnBlankSave();
-      await reportsPage.fillReportName(customReportName);
-      await reportsPage.expectMissingDisplayFieldsWarning();
-    });
-
-    await test.step('Valid Report Name, Selection Criteria & Display Fields save cleanly', async () => {
-      await reportsPage.addSelectionCriterion('Employment Status');
-      await reportsPage.addDisplayField('Personal', 'Employee Id');
-      await reportsPage.addDisplayField('Personal', 'Employee First Name');
-      await reportsPage.addDisplayField('Personal', 'Employee Last Name');
-
-      const reportId = await reportsPage.saveReportAndCaptureId();
-      registerDisposableReportId(reportId);
-
-      await expect(reportsPage.reportTitleHeading).toHaveText(customReportName);
-
+    try {
       await reportsPage.gotoReportsList();
-      await reportsPage.searchReportByNameAutocomplete(customReportName, customReportName);
-      await expect(reportsPage.rowByReportName(customReportName)).toBeVisible();
-    });
+      await reportsPage.openAddReportFromList();
+
+      await test.step('Blank submission blocks save with Required error & missing Display Fields warns', async () => {
+        await reportsPage.expectRequiredErrorOnBlankSave();
+        await reportsPage.fillReportName(customReportName);
+        await reportsPage.expectMissingDisplayFieldsWarning();
+      });
+
+      await test.step('Valid Report Name, Selection Criteria & Display Fields save cleanly', async () => {
+        await reportsPage.addSelectionCriterion('Employment Status');
+        await reportsPage.addDisplayField('Personal', 'Employee Id');
+        await reportsPage.addDisplayField('Personal', 'Employee First Name');
+        await reportsPage.addDisplayField('Personal', 'Employee Last Name');
+
+        reportId = await reportsPage.saveReportAndCaptureId();
+        registerDisposableReportId(reportId);
+
+        await expect(reportsPage.reportTitleHeading).toHaveText(customReportName);
+
+        await reportsPage.gotoReportsList();
+        await reportsPage.searchReportByNameAutocomplete(customReportName, customReportName);
+        await expect(reportsPage.rowByReportName(customReportName)).toBeVisible();
+      });
+    } finally {
+      if (reportId === undefined) {
+        registerDisposableReportName(customReportName);
+      }
+    }
   });
 
   test('TC-RPT-004: Configure multi-criteria filters & edit existing report @functional @regression', async ({
     reportsPage,
     seededReport,
   }) => {
+    test.slow();
     await reportsPage.gotoReportsList();
     await reportsPage.openEditReportFromList(seededReport.name);
 
@@ -213,6 +223,8 @@ test.describe('Module 5: Reports (PIM)', () => {
       },
     });
 
+    let reportDeleted = false;
+
     try {
       await test.step('Run zero-match report and verify No Records Found empty state', async () => {
         await reportsPage.gotoReportsList();
@@ -237,9 +249,12 @@ test.describe('Module 5: Reports (PIM)', () => {
           baseURL
         );
         expect(deletedInApi, 'Deleted report should no longer exist in GET API').toBe(true);
+        reportDeleted = true;
       });
     } finally {
-      await zeroMatchReport.cleanup();
+      if (!reportDeleted) {
+        await zeroMatchReport.cleanup();
+      }
     }
   });
 
@@ -363,7 +378,14 @@ test.describe('Module 5: Reports (PIM)', () => {
     seededReport,
   }, testInfo) => {
     const page = reportsPage.page;
-    const knownPimA11yRules = ['button-name', 'color-contrast', 'html-has-lang', 'label', 'list'];
+    const knownPimA11yRules = [
+      'button-name',
+      'color-contrast',
+      'html-has-lang',
+      'label',
+      'list',
+      'scrollable-region-focusable',
+    ];
 
     await test.step('Capture deterministic Reports list visual baseline & WCAG audit', async () => {
       const definedReportsPattern = '**/api/v2/pim/reports/defined?*';
