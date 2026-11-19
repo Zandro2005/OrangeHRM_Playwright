@@ -23,6 +23,7 @@ export interface AdminFixtures {
   employeePage: EmployeePage;
   usersPage: UsersPage;
   reportsPage: ReportsPage;
+  authenticatedEssPage: Page;
   seededEmployee: SeededEmployee;
   seededEmployeeWithJob: SeededEmployee;
   seededEmployeePair: { batchTag: string; first: SeededEmployee; second: SeededEmployee };
@@ -218,6 +219,34 @@ export const test = authTest.extend<AdminFixtures>({
         );
 
       await use(reportsPage);
+    } finally {
+      await context.close().catch(() => undefined);
+    }
+  },
+
+  authenticatedEssPage: async ({ browser, baseURL, seededSystemUser, telemetry }, use) => {
+    const context = await browser.newContext(baseURL ? { baseURL } : undefined);
+    const page = await context.newPage();
+    telemetry.attach(page);
+
+    // Stub OrangeHRM telemetry push so PHP session locks never block ESS navigations
+    await page.route('**/events/push**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+
+    try {
+      const loginPage = new LoginPage(page);
+      await loginPage.goto();
+      await loginPage.login(seededSystemUser.username, seededSystemUser.password);
+      await page.waitForURL(/\/dashboard\/index/, {
+        waitUntil: 'domcontentloaded',
+        timeout: 35_000,
+      });
+      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
+        timeout: 25_000,
+      });
+
+      await use(page);
     } finally {
       await context.close().catch(() => undefined);
     }
