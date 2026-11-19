@@ -3,7 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import { APIResponse, Browser, BrowserContext, Locator, Page } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
-import { generateEmployeeData, GeneratedEmployeeInput } from './testDataGenerator';
+import {
+  generateEmployeeData,
+  GeneratedEmployeeInput,
+  generateReportName,
+} from './testDataGenerator';
 
 export interface RetryOptions {
   maxAttempts?: number;
@@ -285,10 +289,21 @@ async function createValidatedAdminApiContext(
   ).catch(() => undefined);
 
   if (probe && probe.status() === 200) {
+    try {
+      const now = new Date();
+      fs.utimesSync(storageStatePath, now, now);
+    } catch {
+      // Ignore mtime refresh races across parallel workers
+    }
     return cachedContext;
   }
 
-  // Fallback to a fresh UI login if the demo server invalidated auth/auth.json within TTL
+  // Return cachedContext on transient timeouts or non-auth errors so callers' retry loops recover without wiping cookies
+  if (!probe || (probe.status() !== 401 && probe.status() !== 403)) {
+    return cachedContext;
+  }
+
+  // Fallback to a fresh UI login only when the demo server invalidated auth/auth.json (401/403)
   await cachedContext.close().catch(() => undefined);
   if (fs.existsSync(storageStatePath)) {
     fs.rmSync(storageStatePath, { force: true });
@@ -778,6 +793,174 @@ export async function getSystemUserViaApi(
       total: body.meta?.total ?? rows.length,
       matches: rows,
     };
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+export interface ReportCriterionPayload {
+  operator: string;
+  x: string;
+  y?: string;
+}
+
+export interface ReportFieldGroupPayload {
+  fields: number[];
+  includeHeader: boolean;
+}
+
+export interface SeedReportOptions {
+  name?: string;
+  include?: 'onlyCurrent' | 'currentAndPast' | 'onlyPast';
+  criteria?: Record<string, ReportCriterionPayload>;
+  fieldGroup?: Record<string, ReportFieldGroupPayload>;
+}
+
+export interface SeededReport {
+  id: number;
+  name: string;
+  cleanup: () => Promise<void>;
+}
+
+/** Seed a disposable PIM Defined Report via REST API with guaranteed teardown. */
+export async function seedDefinedReport(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string,
+  options: SeedReportOptions = {}
+): Promise<SeededReport> {
+  const name = options.name ?? generateReportName('Rpt');
+  const include = options.include ?? 'onlyCurrent';
+  const criteria = options.criteria ?? {};
+  const fieldGroup = options.fieldGroup ?? {
+    '1': { fields: [9, 11, 10], includeHeader: false },
+  };
+
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  let reportId: number | undefined;
+
+  const cleanup = async (): Promise<void> => {
+    try {
+      if (reportId !== undefined) {
+        await safeDeleteRecord(
+          adminContext,
+          '/web/index.php/api/v2/pim/reports/defined',
+          reportId,
+          'report'
+        );
+      }
+    } finally {
+      await adminContext.close().catch(() => undefined);
+    }
+  };
+
+  try {
+    const res = await apiPostWithRetry(adminContext, '/web/index.php/api/v2/pim/reports/defined', {
+      name,
+      include,
+      criteria,
+      fieldGroup,
+    });
+    if (!res.ok()) {
+      throw new Error(`Failed to seed report (${res.status()}): ${await res.text()}`);
+    }
+    const body = (await res.json()) as { data?: { id?: number } };
+    reportId = body.data?.id;
+    if (!reportId) {
+      throw new Error('Report seeding succeeded without returning a report id.');
+    }
+
+    return { id: reportId, name, cleanup };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+}
+
+/** Delete a PIM Defined Report by id via Admin REST API (best-effort teardown). */
+export async function deleteDefinedReportById(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  reportId: number,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    await safeDeleteRecord(
+      adminContext,
+      '/web/index.php/api/v2/pim/reports/defined',
+      reportId,
+      'report'
+    );
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+/** Delete any PIM Defined Report(s) matching `name` via Admin REST API (best-effort teardown). */
+export async function deleteDefinedReportByNameIfPresent(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  name: string,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(
+          `/web/index.php/api/v2/pim/reports/defined?name=${encodeURIComponent(name)}`,
+          { timeout: 20_000 }
+        ),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (!res.ok()) {
+      return;
+    }
+    const body = (await res.json()) as {
+      data?: Array<{ id?: number; name?: string }>;
+    };
+    const matchingIds = (body.data ?? [])
+      .filter((row) => row.name === name && typeof row.id === 'number')
+      .map((row) => row.id as number);
+    await safeDeleteRecords(
+      adminContext,
+      '/web/index.php/api/v2/pim/reports/defined',
+      matchingIds,
+      'report'
+    );
+  } catch (error) {
+    const summary = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    console.warn(`Cleanup warning: report lookup for ${name} errored: ${summary}`);
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+/** Verify via GET API that a deleted PIM Defined Report no longer exists (404/422 or empty). */
+export async function verifyDefinedReportDeletedViaApi(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  reportId: number,
+  baseURL?: string
+): Promise<boolean> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(`/web/index.php/api/v2/pim/reports/defined/${reportId}`, {
+          timeout: 20_000,
+        }),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (res.status() === 404 || res.status() === 422) {
+      return true;
+    }
+    if (!res.ok()) {
+      return false;
+    }
+    const body = (await res.json()) as { data?: { id?: number } | null };
+    return !body.data?.id;
   } finally {
     await adminContext.close().catch(() => undefined);
   }

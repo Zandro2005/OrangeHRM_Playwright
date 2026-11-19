@@ -103,3 +103,9 @@ export function generateSystemUserCredentials(prefix = 'usr'): GeneratedSystemUs
     updatedPassword: `Upd!${suffix}8bB`,
   };
 }
+
+/** Generate a unique custom report name for Module 5 PIM Reports tests. */
+export function generateReportName(prefix = 'Rpt'): string {
+  const suffix = crypto.randomBytes(3).toString('hex');
+  return `${prefix}_${suffix}`;
+}
