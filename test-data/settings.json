@@ -1,0 +1,28 @@
+{
+  "localization": {
+    "defaultLanguage": "English (United States)",
+    "defaultLanguageCode": "en_US",
+    "updatedDateFormatPrefix": "dd-mm-yyyy",
+    "updatedDateFormatCode": "d-m-Y",
+    "defaultDateFormatPrefix": "yyyy-dd-mm",
+    "defaultDateFormatCode": "Y-d-m"
+  },
+  "emailConfiguration": {
+    "validSentAs": "admin@example.com",
+    "validSmtpHost": "smtp.example.com",
+    "validSmtpPort": "587",
+    "invalidEmailFormat": "invalid-email-format",
+    "invalidNonNumericPort": "non_numeric_port"
+  },
+  "modules": {
+    "optionalModuleLabel": "Buzz",
+    "optionalModuleSidebarName": "Buzz",
+    "coreLockedModuleLabels": ["Admin Module", "Pim Module"]
+  },
+  "corporateBranding": {
+    "updatedPrimaryColorHex": "#2563eb",
+    "updatedPrimaryColorRgb": "rgb(37, 99, 235)",
+    "defaultPrimaryColorHex": "#ff7b1d",
+    "defaultPrimaryColorRgb": "rgb(255, 123, 29)"
+  }
+}

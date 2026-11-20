@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { APIResponse, Browser, BrowserContext, Locator, Page } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
@@ -250,10 +251,21 @@ async function createValidatedAdminApiContext(
   ).catch(() => undefined);
 
   if (probe && probe.status() === 200) {
+    try {
+      const now = new Date();
+      fs.utimesSync(storageStatePath, now, now);
+    } catch {
+      // Ignore mtime refresh races across parallel workers
+    }
     return cachedContext;
   }
 
-  // Fallback to a fresh UI login if the demo server invalidated auth/auth.json within TTL
+  // Return cachedContext on transient timeouts or non-auth errors so callers' retry loops recover without wiping cookies
+  if (!probe || (probe.status() !== 401 && probe.status() !== 403)) {
+    return cachedContext;
+  }
+
+  // Fallback to a fresh UI login only when the demo server invalidated auth/auth.json (401/403)
   await cachedContext.close().catch(() => undefined);
   if (fs.existsSync(storageStatePath)) {
     fs.rmSync(storageStatePath, { force: true });
@@ -535,6 +547,132 @@ export async function verifyEmployeeDeletedViaApi(
   }
 }
 
+export interface SettingsTestData {
+  localization: {
+    defaultLanguage: string;
+    defaultLanguageCode: string;
+    updatedDateFormatPrefix: string;
+    updatedDateFormatCode: string;
+    defaultDateFormatPrefix: string;
+    defaultDateFormatCode: string;
+  };
+  emailConfiguration: {
+    validSentAs: string;
+    validSmtpHost: string;
+    validSmtpPort: string;
+    invalidEmailFormat: string;
+    invalidNonNumericPort: string;
+  };
+  modules: {
+    optionalModuleLabel: string;
+    optionalModuleSidebarName: string;
+    coreLockedModuleLabels: string[];
+  };
+  corporateBranding: {
+    updatedPrimaryColorHex: string;
+    updatedPrimaryColorRgb: string;
+    defaultPrimaryColorHex: string;
+    defaultPrimaryColorRgb: string;
+  };
+}
+
+/** Load structured Module 7 settings & configuration test data from test-data/settings.json. */
+export function loadSettingsData(): SettingsTestData {
+  const filePath = path.resolve(__dirname, '../test-data/settings.json');
+  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as SettingsTestData;
+}
+
+async function putAdminSettingWithContext(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  endpoint: string,
+  payload: Record<string, unknown>,
+  label: string,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await apiPutWithRetry(adminContext, endpoint, payload);
+    if (!res.ok()) {
+      console.warn(`Teardown warning: failed to restore ${label} (${res.status()})`);
+    }
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+/** Restore default Localization settings (en_US, Y-d-m) via Admin REST API. */
+export async function restoreDefaultLocalizationViaApi(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string
+): Promise<void> {
+  await putAdminSettingWithContext(
+    browser,
+    adminCredentials,
+    '/web/index.php/api/v2/admin/localization',
+    { language: 'en_US', dateFormat: 'Y-d-m' },
+    'default localization',
+    baseURL
+  );
+}
+
+/** Restore all OrangeHRM modules to enabled state via Admin REST API. */
+export async function restoreDefaultModulesViaApi(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string
+): Promise<void> {
+  await putAdminSettingWithContext(
+    browser,
+    adminCredentials,
+    '/web/index.php/api/v2/admin/modules',
+    {
+      admin: true,
+      pim: true,
+      leave: true,
+      time: true,
+      recruitment: true,
+      performance: true,
+      maintenance: true,
+      mobile: true,
+      directory: true,
+      claim: true,
+      buzz: true,
+    },
+    'default modules',
+    baseURL
+  );
+}
+
+/** Reset Corporate Branding theme back to OrangeHRM defaults via Admin REST API. */
+export async function restoreDefaultThemeViaApi(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      async () => {
+        const response = await adminContext.request.delete('/web/index.php/api/v2/admin/theme', {
+          timeout: 25_000,
+        });
+        if (response.status() >= 500) {
+          throw new Error(`DELETE /api/v2/admin/theme returned HTTP ${response.status()}`);
+        }
+        return response;
+      },
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (!res.ok() && res.status() !== 404) {
+      console.warn(`Teardown warning: failed to reset default theme (${res.status()})`);
+    }
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
 const SESSION_VALIDATION_TTL_MS = 1_200_000;
 
 async function hasActiveSession(
@@ -584,6 +722,128 @@ async function hasActiveSession(
   }
 }
 
+function isPidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'EPERM';
+  }
+}
+
+/**
+ * Serialize cross-worker access to shared global OrangeHRM resources (e.g. Localization,
+ * Modules, Corporate Branding, auth/auth.json refresh) via an atomic OS lock file.
+ */
+export async function withCrossWorkerLock<T>(
+  resourceName: string,
+  operation: () => Promise<T>,
+  options: { baseURL?: string; timeoutMs?: number; staleMs?: number; pollMs?: number } = {}
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? 240_000;
+  const staleMs = options.staleMs ?? 180_000;
+  const pollMs = options.pollMs ?? 250;
+
+  const targetScope = options.baseURL || process.env.BASE_URL || 'default';
+  const scopeHash = crypto.createHash('sha1').update(targetScope).digest('hex').slice(0, 8);
+  const safeName = resourceName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const lockDir = path.join(os.tmpdir(), 'orangehrm-playwright-locks');
+  fs.mkdirSync(lockDir, { recursive: true });
+  const lockPath = path.join(lockDir, `${safeName}-${scopeHash}.lock`);
+  const ownerToken = `${process.pid}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
+  const deadline = Date.now() + timeoutMs;
+
+  let acquired = false;
+  while (Date.now() < deadline) {
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      try {
+        fs.writeFileSync(
+          fd,
+          JSON.stringify({ pid: process.pid, ownerToken, acquiredAt: Date.now() }),
+          'utf8'
+        );
+      } finally {
+        fs.closeSync(fd);
+      }
+      acquired = true;
+      break;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EEXIST') {
+        throw error;
+      }
+
+      try {
+        const stat = fs.statSync(lockPath);
+        const ageMs = Date.now() - stat.mtimeMs;
+        let ownerDead = false;
+        if (ageMs > 2_000) {
+          const raw = fs.readFileSync(lockPath, 'utf8').trim();
+          if (raw) {
+            const parsed = JSON.parse(raw) as { pid?: number };
+            if (typeof parsed.pid === 'number' && !isPidAlive(parsed.pid)) {
+              ownerDead = true;
+            }
+          }
+        }
+        if (ageMs > staleMs || ownerDead) {
+          fs.rmSync(lockPath, { force: true });
+          continue;
+        }
+      } catch {
+        continue;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+  }
+
+  if (!acquired) {
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for cross-worker lock "${resourceName}"`);
+  }
+
+  try {
+    return await operation();
+  } finally {
+    try {
+      const raw = fs.readFileSync(lockPath, 'utf8').trim();
+      if (!raw || raw.includes(ownerToken)) {
+        fs.rmSync(lockPath, { force: true });
+      }
+    } catch {
+      // Lock file already removed
+    }
+  }
+}
+
+/** Write Playwright storageState via a PID-unique temp file and atomic rename. */
+export async function saveStorageStateAtomically(
+  context: BrowserContext,
+  storageStatePath: string
+): Promise<void> {
+  const tempPath = `${storageStatePath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+    await context.storageState({ path: tempPath });
+    try {
+      fs.renameSync(tempPath, storageStatePath);
+    } catch (error) {
+      if (!fs.existsSync(storageStatePath)) {
+        throw error;
+      }
+    }
+  } finally {
+    if (fs.existsSync(tempPath)) {
+      fs.rmSync(tempPath, { force: true });
+    }
+  }
+}
+
 /** Ensure auth/auth.json exists with an active Admin session, refreshing atomically if expired. */
 export async function ensureAuthStorageState(
   browser: Browser,
@@ -595,26 +855,23 @@ export async function ensureAuthStorageState(
     return storageStatePath;
   }
 
-  const adminContext = await authenticateAdminContext(browser, adminCredentials, baseURL);
-  const tempPath = `${storageStatePath}.${process.pid}.tmp`;
-  try {
-    fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
-    await adminContext.storageState({ path: tempPath });
-    try {
-      fs.renameSync(tempPath, storageStatePath);
-    } catch (error) {
-      // Another parallel worker may have just finished writing auth/auth.json on Windows
-      if (!fs.existsSync(storageStatePath)) {
-        throw error;
+  return withCrossWorkerLock(
+    'auth-storage-state',
+    async () => {
+      if (await hasActiveSession(browser, storageStatePath, baseURL)) {
+        return storageStatePath;
       }
-    }
-    return storageStatePath;
-  } finally {
-    if (fs.existsSync(tempPath)) {
-      fs.rmSync(tempPath, { force: true });
-    }
-    await adminContext.close();
-  }
+
+      const adminContext = await authenticateAdminContext(browser, adminCredentials, baseURL);
+      try {
+        await saveStorageStateAtomically(adminContext, storageStatePath);
+        return storageStatePath;
+      } finally {
+        await adminContext.close();
+      }
+    },
+    { baseURL }
+  );
 }
 
 /**

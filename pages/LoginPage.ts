@@ -59,6 +59,9 @@ export class LoginPage {
     await withRetry(
       async (attempt) => {
         if (attempt > 1) {
+          if (/\/web\/index\.php\//.test(this.page.url()) && !/\/auth\//.test(this.page.url())) {
+            return;
+          }
           await this.goto();
         }
 
@@ -76,7 +79,10 @@ export class LoginPage {
 
         const deadline = Date.now() + 22_000;
         while (Date.now() < deadline) {
-          if (/\/dashboard\/index/.test(this.page.url())) {
+          if (
+            /\/dashboard\/index/.test(this.page.url()) ||
+            (/\/web\/index\.php\//.test(this.page.url()) && !/\/auth\//.test(this.page.url()))
+          ) {
             return;
           }
 
