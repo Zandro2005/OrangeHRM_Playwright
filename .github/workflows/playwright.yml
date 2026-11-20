@@ -10,7 +10,7 @@ on:
 
 jobs:
   playwright-tests:
-    # Step 2: Run on Ubuntu across all 5 Playwright projects (3 desktop + 2 mobile)
+    # Step 2: Run Modules 1-6 in parallel across all 5 Playwright projects (3 desktop + 2 mobile)
     name: Run Playwright (${{ matrix.project }})
     timeout-minutes: 30
     runs-on: ubuntu-latest
@@ -50,9 +50,9 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps ${{ matrix.engine }}
 
-      # Step 7: Run Playwright tests for this project (uses GitHub Secrets for credentials)
+      # Step 7: Run non-global-mutating Playwright tests for this project (Modules 1-6)
       - name: Run Playwright Tests (${{ matrix.project }})
-        run: npx playwright test --project="${{ matrix.project }}"
+        run: npx playwright test --project="${{ matrix.project }}" --grep-invert "Module 7: Settings & Configuration"
         env:
           BASE_URL: ${{ vars.BASE_URL || 'https://opensource-demo.orangehrmlive.com' }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
@@ -73,6 +73,58 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.project }}
+          path: test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  playwright-settings:
+    # Run Module 7 (Settings & Configuration) on a single runner after parallel jobs finish
+    # so global OrangeHRM server settings (Localization, Modules, Branding) never collide across VMs
+    name: Run Playwright Settings (All Browsers)
+    needs: playwright-tests
+    if: ${{ !cancelled() }}
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    concurrency:
+      group: orangehrm-global-settings
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout GitHub Repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Module 7 Settings Tests (All 5 Projects)
+        run: npx playwright test tests/settings.spec.ts
+        env:
+          BASE_URL: ${{ vars.BASE_URL || 'https://opensource-demo.orangehrmlive.com' }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+      - name: Upload HTML Report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-settings
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload Failure Artifacts (Screenshots, Videos, Traces)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-settings
           path: test-results/
           retention-days: 14
           if-no-files-found: ignore
