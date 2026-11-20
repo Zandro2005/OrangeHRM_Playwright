@@ -4,6 +4,7 @@ import { test as authTest, expect } from './authFixture';
 import { EmployeePage } from '../pages/EmployeePage';
 import { LoginPage } from '../pages/LoginPage';
 import { ReportsPage } from '../pages/ReportsPage';
+import { SettingsPage } from '../pages/SettingsPage';
 import { UsersPage } from '../pages/UsersPage';
 import {
   SeededEmployee,
@@ -14,6 +15,7 @@ import {
   deleteEmployeeByEmpNumber,
   deleteSystemUserByUsernameIfPresent,
   gotoWithRetry,
+  saveStorageStateAtomically,
   seedDefinedReport,
   seedEmployee,
   seedSystemUser,
@@ -23,6 +25,7 @@ export interface AdminFixtures {
   employeePage: EmployeePage;
   usersPage: UsersPage;
   reportsPage: ReportsPage;
+  settingsPage: SettingsPage;
   authenticatedEssPage: Page;
   seededEmployee: SeededEmployee;
   seededEmployeeWithJob: SeededEmployee;
@@ -80,8 +83,16 @@ async function openAdminSessionContext(
     });
     if (page.url().includes('/auth/login')) {
       await loginPage.login(adminCredentials.username, adminCredentials.password);
-      await gotoWithRetry(page, url, readyLocator, { maxAttempts: 3 });
-      await context.storageState({ path: storageStatePath }).catch(() => undefined);
+      const landedOnTarget =
+        page.url().includes(url) &&
+        (await readyLocator
+          .waitFor({ state: 'visible', timeout: 25_000 })
+          .then(() => true)
+          .catch(() => false));
+      if (!landedOnTarget) {
+        await gotoWithRetry(page, url, readyLocator, { maxAttempts: 3 });
+      }
+      await saveStorageStateAtomically(context, storageStatePath).catch(() => undefined);
     }
     if (afterNavigate) {
       await afterNavigate();
@@ -219,6 +230,51 @@ export const test = authTest.extend<AdminFixtures>({
         );
 
       await use(reportsPage);
+    } finally {
+      await context.close().catch(() => undefined);
+    }
+  },
+
+  settingsPage: async (
+    { browser, baseURL, storageStatePath, adminCredentials, telemetry },
+    use
+  ) => {
+    const { context, page, navigateWithReauth } = await openAdminSessionContext(
+      browser,
+      baseURL,
+      storageStatePath,
+      adminCredentials,
+      telemetry
+    );
+
+    try {
+      const settingsPage = new SettingsPage(page);
+      const clearSpinners = () => settingsPage.waitForSpinnerToClear();
+
+      settingsPage.gotoEmailConfiguration = async () =>
+        navigateWithReauth(
+          '/web/index.php/admin/listMailConfiguration',
+          settingsPage.saveButton,
+          clearSpinners
+        );
+      settingsPage.gotoLocalization = async () =>
+        navigateWithReauth('/web/index.php/admin/localization', settingsPage.saveButton, async () => {
+          await clearSpinners();
+          await expect(
+            settingsPage.inputGroupByLabel('Language').locator('.oxd-select-text-input')
+          ).not.toHaveText(/^\s*$/, { timeout: 25_000 });
+        });
+      settingsPage.gotoModules = async () =>
+        navigateWithReauth('/web/index.php/admin/viewModules', settingsPage.saveButton, async () => {
+          await clearSpinners();
+          await expect(page.locator('.orangehrm-module-field-row').first()).toBeVisible({
+            timeout: 25_000,
+          });
+        });
+      settingsPage.gotoCorporateBranding = async () =>
+        navigateWithReauth('/web/index.php/admin/addTheme', settingsPage.publishButton, clearSpinners);
+
+      await use(settingsPage);
     } finally {
       await context.close().catch(() => undefined);
     }

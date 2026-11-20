@@ -59,6 +59,9 @@ export class LoginPage {
     await withRetry(
       async (attempt) => {
         if (attempt > 1) {
+          if (/\/web\/index\.php\//.test(this.page.url()) && !/\/auth\//.test(this.page.url())) {
+            return;
+          }
           await this.goto();
         }
 
