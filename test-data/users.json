@@ -25,5 +25,12 @@
       "username": "!@#$%^&*()_+",
       "password": "<script>alert(1)</script>"
     }
-  ]
+  ],
+  "userValidation": {
+    "shortUsername": "usr",
+    "weakPassword": "short",
+    "mismatchedPasswordA": "ValidPass!123",
+    "mismatchedPasswordB": "MismatchPass!999",
+    "nonExistentUsername": "non_existent_sys_user_99999"
+  }
 }

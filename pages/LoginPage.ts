@@ -79,17 +79,14 @@ export class LoginPage {
 
         const deadline = Date.now() + 22_000;
         while (Date.now() < deadline) {
-          if (
-            /\/dashboard\/index/.test(this.page.url()) ||
-            (/\/web\/index\.php\//.test(this.page.url()) && !/\/auth\//.test(this.page.url()))
-          ) {
+          if (/\/web\/index\.php\/(?!auth\/)/.test(this.page.url())) {
             return;
           }
 
           if (await this.invalidCredentialsAlert.isVisible().catch(() => false)) {
             const alertText =
               (await this.invalidCredentialsAlert.textContent().catch(() => ''))?.trim() ?? '';
-            if (/Invalid credentials/i.test(alertText)) {
+            if (/Invalid credentials|Account disabled/i.test(alertText)) {
               return;
             }
             if (alertText.length > 0) {
@@ -139,6 +136,13 @@ export class LoginPage {
     await expect(this.page).toHaveURL(/\/auth\/login/);
     await expect(this.invalidCredentialsAlert).toBeVisible();
     await expect(this.invalidCredentialsAlert).toContainText('Invalid credentials');
+  }
+
+  /** Assert the disabled-account alert banner displays and URL stays on login. */
+  async expectAccountDisabledError(): Promise<void> {
+    await expect(this.page).toHaveURL(/\/auth\/login/);
+    await expect(this.invalidCredentialsAlert).toBeVisible();
+    await expect(this.invalidCredentialsAlert).toContainText(/Account disabled/i);
   }
 
   /** Assert inline "Required" validation displays beneath the expected login field(s). */

@@ -85,3 +85,27 @@ export function loadEmployeesTestData(): EmployeesTestData {
   const filePath = path.resolve(__dirname, '../test-data/employees.json');
   return JSON.parse(fs.readFileSync(filePath, 'utf8')) as EmployeesTestData;
 }
+
+export interface GeneratedSystemUserCredentials {
+  username: string;
+  password: string;
+  updatedUsername: string;
+  updatedPassword: string;
+}
+
+/** Generate unique usernames and complexity-compliant passwords for Module 4 User Management tests. */
+export function generateSystemUserCredentials(prefix = 'usr'): GeneratedSystemUserCredentials {
+  const suffix = crypto.randomBytes(3).toString('hex');
+  return {
+    username: `${prefix}_${suffix}`,
+    password: `Usr!${suffix}9aA`,
+    updatedUsername: `${prefix}_upd_${suffix}`,
+    updatedPassword: `Upd!${suffix}8bB`,
+  };
+}
+
+/** Generate a unique custom report name for Module 5 PIM Reports tests. */
+export function generateReportName(prefix = 'Rpt'): string {
+  const suffix = crypto.randomBytes(3).toString('hex');
+  return `${prefix}_${suffix}`;
+}

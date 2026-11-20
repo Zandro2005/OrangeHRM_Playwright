@@ -92,8 +92,8 @@ export class DashboardPage {
     }
   }
 
-  /** Log out via the user dropdown menu and verify redirect back to Login. */
-  async logout(): Promise<void> {
+  /** Close the mobile slide-over navigation drawer if currently open. */
+  async closeMobileDrawerIfOpen(): Promise<void> {
     if (await this.isMobileLayout()) {
       const sidepanelClass = (await this.sidepanel.getAttribute('class')) ?? '';
       if (sidepanelClass.includes('toggled')) {
@@ -101,6 +101,46 @@ export class DashboardPage {
         await expect(this.sidepanel).not.toHaveClass(/toggled/);
       }
     }
+  }
+
+  /** Verify all expected Admin sidebar module links are visible and enabled. */
+  async expectAdminSidebarModulesVisible(
+    modules: readonly string[] = ['Admin', 'PIM', 'Maintenance', 'Leave', 'Time']
+  ): Promise<void> {
+    await this.ensureSidebarOpen();
+    for (const menu of modules) {
+      const link = this.navLink(menu);
+      await expect(link).toBeVisible();
+      await expect(link).toBeEnabled();
+    }
+    await this.closeMobileDrawerIfOpen();
+  }
+
+  /** Verify direct navigation to a privileged route is blocked for the active non-Admin session. */
+  async expectPrivilegedRouteBlocked(route: string): Promise<void> {
+    const response = await this.page.goto(route, {
+      waitUntil: 'domcontentloaded',
+      timeout: 35_000,
+    });
+    const status = response?.status() ?? 0;
+    const isHttpBlocked = status === 401 || status === 403;
+    const bodyText = (await this.page.locator('body').textContent()) ?? '';
+    const hasBlockedMessage = /Credential Required|Access Denied/i.test(bodyText);
+    const redirectedAway = !this.page.url().includes(route);
+
+    expect(
+      isHttpBlocked || hasBlockedMessage || redirectedAway,
+      `Expected privileged route ${route} to be blocked, got status=${status}, url=${this.page.url()}`
+    ).toBe(true);
+
+    await expect(this.page.locator('input[name="firstName"]')).toHaveCount(0);
+    await expect(this.page.locator('.oxd-table-filter')).toHaveCount(0);
+    await expect(this.page.locator('input[type="password"]')).toHaveCount(0);
+  }
+
+  /** Log out via the user dropdown menu and verify redirect back to Login. */
+  async logout(): Promise<void> {
+    await this.closeMobileDrawerIfOpen();
 
     await withRetry(
       async () => {
@@ -214,13 +254,7 @@ export class DashboardPage {
 
   /** Open the profile dropdown About modal, verify details, and close it cleanly. */
   async openAndCloseAboutModal(): Promise<void> {
-    if (await this.isMobileLayout()) {
-      const sidepanelClass = (await this.sidepanel.getAttribute('class')) ?? '';
-      if (sidepanelClass.includes('toggled')) {
-        await this.mobileDrawerCloseButton.click();
-        await expect(this.sidepanel).not.toHaveClass(/toggled/);
-      }
-    }
+    await this.closeMobileDrawerIfOpen();
 
     await this.userDropdown.click();
     await this.aboutMenuItem.click();
@@ -384,10 +418,8 @@ export class DashboardPage {
     await expect(this.sidepanel).not.toHaveClass(/toggled/);
   }
 
-  /** Wait until Dashboard chrome, spinners, web fonts, and images stabilize for screenshot diffing. */
-  async waitForVisualStability(): Promise<void> {
-    await this.waitForDashboardIdle();
-    await resetOrangeHrmThemeVariables(this.page);
+  /** Wait for web fonts and active images to settle before visual snapshot comparison. */
+  private async waitForFontsAndImages(): Promise<void> {
     await this.page.evaluate(async () => {
       await document.fonts.ready;
       const pendingImages = Array.from(document.images).filter((img) => !img.complete);
@@ -401,6 +433,20 @@ export class DashboardPage {
         )
       );
     });
+  }
+
+  /** Wait until Dashboard chrome, spinners, web fonts, and images stabilize for screenshot diffing. */
+  async waitForVisualStability(): Promise<void> {
+    await this.waitForDashboardIdle();
+    await resetOrangeHrmThemeVariables(this.page);
+    await this.waitForFontsAndImages();
+  }
+
+  /** Ensure sidebar drawer/panel, theme CSS variables, fonts, and images are stable before diffing. */
+  async waitForSidebarVisualStability(): Promise<void> {
+    await this.ensureSidebarOpen();
+    await resetOrangeHrmThemeVariables(this.page);
+    await this.waitForFontsAndImages();
   }
 
   /** Return locators for dynamic user/widget content areas to mask in visual snapshots. */

@@ -292,14 +292,21 @@ export class EmployeePage {
     return chosen;
   }
 
-  /** Switch to a profile sub-tab (`Personal Details`, `Contact Details`, `Job`) and wait until ready. */
-  async openProfileTab(tabName: 'Personal Details' | 'Contact Details' | 'Job'): Promise<void> {
-    const apiKeyword =
-      tabName === 'Personal Details'
-        ? 'personal-details'
-        : tabName === 'Contact Details'
-          ? 'contact-details'
-          : 'job-details';
+  /** Switch to a profile sub-tab (`Personal Details`, `Contact Details`, `Job`, `Salary`) and wait until ready. */
+  async openProfileTab(
+    tabName: 'Personal Details' | 'Contact Details' | 'Job' | 'Salary'
+  ): Promise<void> {
+    const tabConfig: Record<
+      'Personal Details' | 'Contact Details' | 'Job' | 'Salary',
+      { apiKeyword: string; urlPattern: RegExp }
+    > = {
+      'Personal Details': { apiKeyword: 'personal-details', urlPattern: /\/pim\/viewPersonalDetails/ },
+      'Contact Details': { apiKeyword: 'contact-details', urlPattern: /\/pim\/contactDetails/ },
+      Job: { apiKeyword: 'job-details', urlPattern: /\/pim\/viewJobDetails/ },
+      Salary: { apiKeyword: 'salary-components', urlPattern: /\/pim\/viewSalaryList/ },
+    };
+    const { apiKeyword, urlPattern } = tabConfig[tabName];
+
     const dataHydratedPromise = this.page
       .waitForResponse(
         (res) => res.request().method() === 'GET' && res.url().includes(apiKeyword),
@@ -315,18 +322,37 @@ export class EmployeePage {
     await expect(tab).toBeVisible();
     await tab.click({ noWaitAfter: true });
 
-    const urlPattern =
-      tabName === 'Personal Details'
-        ? /\/pim\/viewPersonalDetails/
-        : tabName === 'Contact Details'
-          ? /\/pim\/contactDetails/
-          : /\/pim\/viewJobDetails/;
     await this.page.waitForURL(urlPattern, { waitUntil: 'domcontentloaded', timeout: 35_000 });
     await dataHydratedPromise;
     await this.waitForSpinnerToClear();
     await this.page.evaluate(
       () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
     );
+  }
+
+  /** Open the My Info -> Job tab as an ESS user and verify HR-controlled fields are read-only. */
+  async expectJobTabReadOnlyForEss(): Promise<void> {
+    await this.openProfileTab('Job');
+    await expect(this.page.locator('form.oxd-form button[type="submit"]')).toHaveCount(0);
+    await expect
+      .poll(async () => this.page.locator('.oxd-select-text--disabled').count(), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
+    await expect
+      .poll(async () => this.page.locator('input[disabled]').count(), { timeout: 20_000 })
+      .toBeGreaterThan(0);
+  }
+
+  /** Open the My Info -> Salary tab as an ESS user and verify salary records cannot be edited or added. */
+  async expectSalaryTabReadOnlyForEss(): Promise<void> {
+    await this.openProfileTab('Salary');
+    await expect(
+      this.page.getByRole('heading', { name: 'Assigned Salary Components' })
+    ).toBeVisible();
+    await expect(
+      this.page.locator('button:has-text("Add"), form.oxd-form button[type="submit"]')
+    ).toHaveCount(0);
   }
 
   /** Format a `YYYY-MM-DD` date string to match OrangeHRM's active localization placeholder. */

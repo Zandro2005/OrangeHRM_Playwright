@@ -4,7 +4,11 @@ import os from 'os';
 import path from 'path';
 import { APIResponse, Browser, BrowserContext, Locator, Page } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
-import { generateEmployeeData, GeneratedEmployeeInput } from './testDataGenerator';
+import {
+  generateEmployeeData,
+  GeneratedEmployeeInput,
+  generateReportName,
+} from './testDataGenerator';
 
 export interface RetryOptions {
   maxAttempts?: number;
@@ -136,9 +140,18 @@ export interface InvalidLoginRow {
   useWrongPasswordCase?: boolean;
 }
 
+export interface UserValidationData {
+  shortUsername: string;
+  weakPassword: string;
+  mismatchedPasswordA: string;
+  mismatchedPasswordB: string;
+  nonExistentUsername: string;
+}
+
 export interface UsersTestData {
   essUser: EssUserConfig;
   invalidLogins: InvalidLoginRow[];
+  userValidation: UserValidationData;
 }
 
 export interface SeededEssAccount {
@@ -212,21 +225,47 @@ export interface SeedEmployeeOptions extends Partial<GeneratedEmployeeInput> {
   assignJobDetails?: boolean;
 }
 
+async function safeDeleteRecords(
+  context: BrowserContext,
+  endpoint: string,
+  ids: number[],
+  label: string
+): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+  const idLabel = ids.length === 1 ? String(ids[0]) : `[${ids.join(', ')}]`;
+  try {
+    const res = await withRetry(
+      async () => {
+        const response = await context.request.delete(endpoint, {
+          timeout: 25_000,
+          data: { ids },
+        });
+        if (response.status() >= 500) {
+          throw new Error(`DELETE ${endpoint} returned HTTP ${response.status()}`);
+        }
+        return response;
+      },
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    // Treat 404/422 as already deleted during teardown
+    if (!res.ok() && res.status() !== 404 && res.status() !== 422) {
+      console.warn(`Cleanup warning: failed to delete ${label} ${idLabel} (${res.status()})`);
+    }
+  } catch (error) {
+    const summary = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    console.warn(`Cleanup warning: ${label} ${idLabel} deletion errored: ${summary}`);
+  }
+}
+
 async function safeDeleteRecord(
   context: BrowserContext,
   endpoint: string,
   id: number,
   label: string
 ): Promise<void> {
-  try {
-    const res = await context.request.delete(endpoint, { timeout: 25_000, data: { ids: [id] } });
-    // Treat 404 as already deleted during teardown
-    if (!res.ok() && res.status() !== 404) {
-      console.warn(`Cleanup warning: failed to delete ${label} ${id} (${res.status()})`);
-    }
-  } catch (error) {
-    console.warn(`Cleanup warning: ${label} ${id} deletion errored:`, error);
-  }
+  await safeDeleteRecords(context, endpoint, [id], label);
 }
 
 async function createValidatedAdminApiContext(
@@ -495,9 +534,13 @@ export async function deleteEmployeeByIdIfPresent(
 ): Promise<void> {
   const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
   try {
-    const res = await adminContext.request.get(
-      `/web/index.php/api/v2/pim/employees?employeeId=${encodeURIComponent(employeeId)}`,
-      { timeout: 20_000 }
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(
+          `/web/index.php/api/v2/pim/employees?employeeId=${encodeURIComponent(employeeId)}`,
+          { timeout: 20_000 }
+        ),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
     );
     if (!res.ok()) {
       return;
@@ -508,11 +551,15 @@ export async function deleteEmployeeByIdIfPresent(
     const matchingIds = (body.data ?? [])
       .filter((row) => row.employeeId === employeeId && typeof row.empNumber === 'number')
       .map((row) => row.empNumber as number);
-    if (matchingIds.length > 0) {
-      await adminContext.request
-        .delete('/web/index.php/api/v2/pim/employees', { data: { ids: matchingIds } })
-        .catch(() => undefined);
-    }
+    await safeDeleteRecords(
+      adminContext,
+      '/web/index.php/api/v2/pim/employees',
+      matchingIds,
+      'employee'
+    );
+  } catch (error) {
+    const summary = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    console.warn(`Cleanup warning: employee lookup for ${employeeId} errored: ${summary}`);
   } finally {
     await adminContext.close().catch(() => undefined);
   }
@@ -668,6 +715,379 @@ export async function restoreDefaultThemeViaApi(
     if (!res.ok() && res.status() !== 404) {
       console.warn(`Teardown warning: failed to reset default theme (${res.status()})`);
     }
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+export interface SeededSystemUser {
+  userId: number;
+  empNumber: number;
+  firstName: string;
+  lastName: string;
+  employeeId: string;
+  username: string;
+  password: string;
+  role: 'Admin' | 'ESS';
+  status: boolean;
+  cleanup: () => Promise<void>;
+}
+
+export interface SeedSystemUserOptions {
+  role?: 'Admin' | 'ESS';
+  status?: boolean;
+  usernamePrefix?: string;
+  firstName?: string;
+  lastName?: string;
+  empNumber?: number;
+  employeeId?: string;
+}
+
+/** Seed a disposable employee (unless `empNumber` is provided) and linked System User via REST APIs. */
+export async function seedSystemUser(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string,
+  options: SeedSystemUserOptions = {}
+): Promise<SeededSystemUser> {
+  const role: 'Admin' | 'ESS' = options.role ?? 'ESS';
+  const status = options.status ?? true;
+  const userRoleId = role === 'Admin' ? 1 : 2;
+  const generated = generateEmployeeData(options.firstName ? undefined : 'Sys');
+  const firstName = options.firstName ?? generated.firstName;
+  const lastName = options.lastName ?? generated.lastName;
+  const employeeId = options.employeeId ?? generated.employeeId;
+  const suffix = crypto.randomBytes(3).toString('hex');
+  const username = `${options.usernamePrefix ?? 'sysusr'}_${suffix}`;
+  const password = `Usr!${suffix}9aA`;
+
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  const ownsEmployee = options.empNumber === undefined;
+  let empNumber: number | undefined = options.empNumber;
+  let userId: number | undefined;
+
+  const cleanup = async (): Promise<void> => {
+    try {
+      if (userId !== undefined) {
+        await safeDeleteRecord(adminContext, '/web/index.php/api/v2/admin/users', userId, 'user');
+      }
+      if (ownsEmployee && empNumber !== undefined) {
+        await safeDeleteRecord(
+          adminContext,
+          '/web/index.php/api/v2/pim/employees',
+          empNumber,
+          'employee'
+        );
+      }
+    } finally {
+      await adminContext.close().catch(() => undefined);
+    }
+  };
+
+  try {
+    if (empNumber === undefined) {
+      const empRes = await apiPostWithRetry(adminContext, '/web/index.php/api/v2/pim/employees', {
+        firstName,
+        middleName: '',
+        lastName,
+        employeeId,
+      });
+      if (!empRes.ok()) {
+        throw new Error(`Failed to seed employee (${empRes.status()}): ${await empRes.text()}`);
+      }
+      const empBody = (await empRes.json()) as { data?: { empNumber?: number } };
+      empNumber = empBody.data?.empNumber;
+      if (!empNumber) {
+        throw new Error('Employee seeding succeeded without returning an empNumber.');
+      }
+    }
+
+    const userRes = await apiPostWithRetry(adminContext, '/web/index.php/api/v2/admin/users', {
+      username,
+      password,
+      status,
+      userRoleId,
+      empNumber,
+    });
+    if (!userRes.ok()) {
+      throw new Error(`Failed to seed system user (${userRes.status()}): ${await userRes.text()}`);
+    }
+    const userBody = (await userRes.json()) as { data?: { id?: number } };
+    userId = userBody.data?.id;
+    if (!userId) {
+      throw new Error('System user seeding succeeded without returning a user id.');
+    }
+
+    return {
+      userId,
+      empNumber,
+      firstName,
+      lastName,
+      employeeId,
+      username,
+      password,
+      role,
+      status,
+      cleanup,
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+}
+
+/** Delete any system user(s) matching `username` via Admin REST API (best-effort teardown). */
+export async function deleteSystemUserByUsernameIfPresent(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  username: string,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(
+          `/web/index.php/api/v2/admin/users?username=${encodeURIComponent(username)}`,
+          { timeout: 20_000 }
+        ),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (!res.ok()) {
+      return;
+    }
+    const body = (await res.json()) as {
+      data?: Array<{ id?: number; userName?: string }>;
+    };
+    const matchingIds = (body.data ?? [])
+      .filter((row) => row.userName === username && typeof row.id === 'number')
+      .map((row) => row.id as number);
+    await safeDeleteRecords(
+      adminContext,
+      '/web/index.php/api/v2/admin/users',
+      matchingIds,
+      'system user'
+    );
+  } catch (error) {
+    const summary = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    console.warn(`Cleanup warning: system user lookup for ${username} errored: ${summary}`);
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+export interface SystemUserApiLookup {
+  total: number;
+  matches: Array<{
+    id: number;
+    userName: string;
+    userRole?: { name?: string };
+    status?: boolean;
+  }>;
+}
+
+/** Query `/api/v2/admin/users` by exact username to verify API/UI parity or deletion. */
+export async function getSystemUserViaApi(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  username: string,
+  baseURL?: string
+): Promise<SystemUserApiLookup> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(
+          `/web/index.php/api/v2/admin/users?username=${encodeURIComponent(username)}`,
+          { timeout: 20_000 }
+        ),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (!res.ok()) {
+      return { total: 0, matches: [] };
+    }
+    const body = (await res.json()) as {
+      data?: Array<{
+        id: number;
+        userName: string;
+        userRole?: { name?: string };
+        status?: boolean;
+      }>;
+      meta?: { total?: number };
+    };
+    const rows = body.data ?? [];
+    return {
+      total: body.meta?.total ?? rows.length,
+      matches: rows,
+    };
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+export interface ReportCriterionPayload {
+  operator: string;
+  x: string;
+  y?: string;
+}
+
+export interface ReportFieldGroupPayload {
+  fields: number[];
+  includeHeader: boolean;
+}
+
+export interface SeedReportOptions {
+  name?: string;
+  include?: 'onlyCurrent' | 'currentAndPast' | 'onlyPast';
+  criteria?: Record<string, ReportCriterionPayload>;
+  fieldGroup?: Record<string, ReportFieldGroupPayload>;
+}
+
+export interface SeededReport {
+  id: number;
+  name: string;
+  cleanup: () => Promise<void>;
+}
+
+/** Seed a disposable PIM Defined Report via REST API with guaranteed teardown. */
+export async function seedDefinedReport(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  baseURL?: string,
+  options: SeedReportOptions = {}
+): Promise<SeededReport> {
+  const name = options.name ?? generateReportName('Rpt');
+  const include = options.include ?? 'onlyCurrent';
+  const criteria = options.criteria ?? {};
+  const fieldGroup = options.fieldGroup ?? {
+    '1': { fields: [9, 11, 10], includeHeader: false },
+  };
+
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  let reportId: number | undefined;
+
+  const cleanup = async (): Promise<void> => {
+    try {
+      if (reportId !== undefined) {
+        await safeDeleteRecord(
+          adminContext,
+          '/web/index.php/api/v2/pim/reports/defined',
+          reportId,
+          'report'
+        );
+      }
+    } finally {
+      await adminContext.close().catch(() => undefined);
+    }
+  };
+
+  try {
+    const res = await apiPostWithRetry(adminContext, '/web/index.php/api/v2/pim/reports/defined', {
+      name,
+      include,
+      criteria,
+      fieldGroup,
+    });
+    if (!res.ok()) {
+      throw new Error(`Failed to seed report (${res.status()}): ${await res.text()}`);
+    }
+    const body = (await res.json()) as { data?: { id?: number } };
+    reportId = body.data?.id;
+    if (!reportId) {
+      throw new Error('Report seeding succeeded without returning a report id.');
+    }
+
+    return { id: reportId, name, cleanup };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+}
+
+/** Delete a PIM Defined Report by id via Admin REST API (best-effort teardown). */
+export async function deleteDefinedReportById(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  reportId: number,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    await safeDeleteRecord(
+      adminContext,
+      '/web/index.php/api/v2/pim/reports/defined',
+      reportId,
+      'report'
+    );
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+/** Delete any PIM Defined Report(s) matching `name` via Admin REST API (best-effort teardown). */
+export async function deleteDefinedReportByNameIfPresent(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  name: string,
+  baseURL?: string
+): Promise<void> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(
+          `/web/index.php/api/v2/pim/reports/defined?name=${encodeURIComponent(name)}`,
+          { timeout: 20_000 }
+        ),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (!res.ok()) {
+      return;
+    }
+    const body = (await res.json()) as {
+      data?: Array<{ id?: number; name?: string }>;
+    };
+    const matchingIds = (body.data ?? [])
+      .filter((row) => row.name === name && typeof row.id === 'number')
+      .map((row) => row.id as number);
+    await safeDeleteRecords(
+      adminContext,
+      '/web/index.php/api/v2/pim/reports/defined',
+      matchingIds,
+      'report'
+    );
+  } catch (error) {
+    const summary = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    console.warn(`Cleanup warning: report lookup for ${name} errored: ${summary}`);
+  } finally {
+    await adminContext.close().catch(() => undefined);
+  }
+}
+
+/** Verify via GET API that a deleted PIM Defined Report no longer exists (404/422 or empty). */
+export async function verifyDefinedReportDeletedViaApi(
+  browser: Browser,
+  adminCredentials: AdminCredentials,
+  reportId: number,
+  baseURL?: string
+): Promise<boolean> {
+  const adminContext = await createValidatedAdminApiContext(browser, adminCredentials, baseURL);
+  try {
+    const res = await withRetry(
+      () =>
+        adminContext.request.get(`/web/index.php/api/v2/pim/reports/defined/${reportId}`, {
+          timeout: 20_000,
+        }),
+      { maxAttempts: 3, baseDelayMs: 1_000 }
+    );
+    if (res.status() === 404 || res.status() === 422) {
+      return true;
+    }
+    if (!res.ok()) {
+      return false;
+    }
+    const body = (await res.json()) as { data?: { id?: number } | null };
+    return !body.data?.id;
   } finally {
     await adminContext.close().catch(() => undefined);
   }
