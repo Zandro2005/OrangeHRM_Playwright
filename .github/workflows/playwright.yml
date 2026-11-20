@@ -52,7 +52,8 @@ jobs:
 
       # Step 7: Run non-global-mutating Playwright tests for this project (Modules 1-6)
       - name: Run Playwright Tests (${{ matrix.project }})
-        run: npx playwright test --project="${{ matrix.project }}" --grep-invert "Module 7: Settings & Configuration"
+        run: |
+          npx playwright test --project="${{ matrix.project }}" --grep-invert "Module 7: Settings & Configuration"
         env:
           BASE_URL: ${{ vars.BASE_URL || 'https://opensource-demo.orangehrmlive.com' }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
